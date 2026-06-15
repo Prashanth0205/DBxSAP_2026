@@ -1,0 +1,4 @@
+nfhs_state_norm,canonical_state_norm,source,notes
+MAHARASTRA,MAHARASHTRA,manual:nfhs-misspelling,NFHS spells the state without the H — affects all 38 Maharashtra districts
+NCT OF DELHI,DELHI,manual:state-rename,NFHS uses formal NCT name; pincode dir uses bare DELHI
+DADRA AND NAGAR HAVELI AND DAMAN AND DIU,THE DADRA AND NAGAR HAVELI AND DAMAN AND DIU,manual:state-format,Pincode dir prefixes UT with literal THE

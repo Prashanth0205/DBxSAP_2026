@@ -1,0 +1,854 @@
+[
+  {
+    "district_norm": "SOUTH ANDAMAN",
+    "district_raw": "South Andaman ",
+    "state_norm": "ANDAMAN AND NICOBAR ISLANDS",
+    "state_raw": "Andaman \u0026 Nicobar Islands"
+  },
+  {
+    "district_norm": "SRI POTTI SRIRAMULU NELLO",
+    "district_raw": "Sri Potti Sriramulu Nello ",
+    "state_norm": "ANDHRA PRADESH",
+    "state_raw": "Andhra Pradesh"
+  },
+  {
+    "district_norm": "VISAKHAPATNAM",
+    "district_raw": "Visakhapatnam ",
+    "state_norm": "ANDHRA PRADESH",
+    "state_raw": "Andhra Pradesh"
+  },
+  {
+    "district_norm": "KAMRUP METROPOLITAN",
+    "district_raw": "Kamrup Metropolitan ",
+    "state_norm": "ASSAM",
+    "state_raw": "Assam"
+  },
+  {
+    "district_norm": "MORIGAON",
+    "district_raw": "Morigaon ",
+    "state_norm": "ASSAM",
+    "state_raw": "Assam"
+  },
+  {
+    "district_norm": "PURBA CHAMPARAN",
+    "district_raw": "Purba Champaran ",
+    "state_norm": "BIHAR",
+    "state_raw": "Bihar"
+  },
+  {
+    "district_norm": "KABEERDHAM",
+    "district_raw": "Kabeerdham ",
+    "state_norm": "CHHATTISGARH",
+    "state_raw": "Chhattisgarh"
+  },
+  {
+    "district_norm": "KODAGAON",
+    "district_raw": "Kodagaon ",
+    "state_norm": "CHHATTISGARH",
+    "state_raw": "Chhattisgarh"
+  },
+  {
+    "district_norm": "KORIYA",
+    "district_raw": "Koriya ",
+    "state_norm": "CHHATTISGARH",
+    "state_raw": "Chhattisgarh"
+  },
+  {
+    "district_norm": "UTTAR BASTAR KANKER",
+    "district_raw": "Uttar Bastar Kanker ",
+    "state_norm": "CHHATTISGARH",
+    "state_raw": "Chhattisgarh"
+  },
+  {
+    "district_norm": "DADRA AND NAGAR HAVELI",
+    "district_raw": "Dadra \u0026 Nagar Haveli ",
+    "state_norm": "DADRA AND NAGAR HAVELI AND DAMAN AND DIU",
+    "state_raw": "Dadra and Nagar Haveli \u0026 Daman and Diu"
+  },
+  {
+    "district_norm": "DAMAN",
+    "district_raw": "Daman ",
+    "state_norm": "DADRA AND NAGAR HAVELI AND DAMAN AND DIU",
+    "state_raw": "Dadra and Nagar Haveli \u0026 Daman and Diu"
+  },
+  {
+    "district_norm": "DIU",
+    "district_raw": "Diu ",
+    "state_norm": "DADRA AND NAGAR HAVELI AND DAMAN AND DIU",
+    "state_raw": "Dadra and Nagar Haveli \u0026 Daman and Diu"
+  },
+  {
+    "district_norm": "ARAVALI",
+    "district_raw": "Aravali ",
+    "state_norm": "GUJARAT",
+    "state_raw": "Gujarat"
+  },
+  {
+    "district_norm": "CHHOTA UDAIPUR",
+    "district_raw": "Chhota Udaipur ",
+    "state_norm": "GUJARAT",
+    "state_raw": "Gujarat"
+  },
+  {
+    "district_norm": "THE DANGS",
+    "district_raw": "The Dangs ",
+    "state_norm": "GUJARAT",
+    "state_raw": "Gujarat"
+  },
+  {
+    "district_norm": "CHARKHI DADRI",
+    "district_raw": "Charkhi Dadri ",
+    "state_norm": "HARYANA",
+    "state_raw": "Haryana"
+  },
+  {
+    "district_norm": "GURGAON",
+    "district_raw": "Gurgaon ",
+    "state_norm": "HARYANA",
+    "state_raw": "Haryana"
+  },
+  {
+    "district_norm": "MEWAT",
+    "district_raw": "Mewat ",
+    "state_norm": "HARYANA",
+    "state_raw": "Haryana"
+  },
+  {
+    "district_norm": "BADGAM",
+    "district_raw": "Badgam ",
+    "state_norm": "JAMMU AND KASHMIR",
+    "state_raw": "Jammu \u0026 Kashmir"
+  },
+  {
+    "district_norm": "BANDIPORE",
+    "district_raw": "Bandipore ",
+    "state_norm": "JAMMU AND KASHMIR",
+    "state_raw": "Jammu \u0026 Kashmir"
+  },
+  {
+    "district_norm": "BARAMULA",
+    "district_raw": "Baramula ",
+    "state_norm": "JAMMU AND KASHMIR",
+    "state_raw": "Jammu \u0026 Kashmir"
+  },
+  {
+    "district_norm": "PUNCH",
+    "district_raw": "Punch ",
+    "state_norm": "JAMMU AND KASHMIR",
+    "state_raw": "Jammu \u0026 Kashmir"
+  },
+  {
+    "district_norm": "SHUPIYAN",
+    "district_raw": "Shupiyan ",
+    "state_norm": "JAMMU AND KASHMIR",
+    "state_raw": "Jammu \u0026 Kashmir"
+  },
+  {
+    "district_norm": "KODARMA",
+    "district_raw": "Kodarma ",
+    "state_norm": "JHARKHAND",
+    "state_raw": "Jharkhand"
+  },
+  {
+    "district_norm": "PASHCHIMI SINGHBHUM",
+    "district_raw": "Pashchimi Singhbhum ",
+    "state_norm": "JHARKHAND",
+    "state_raw": "Jharkhand"
+  },
+  {
+    "district_norm": "PURBI SINGHBHUM",
+    "district_raw": "Purbi Singhbhum ",
+    "state_norm": "JHARKHAND",
+    "state_raw": "Jharkhand"
+  },
+  {
+    "district_norm": "SAHIBGANJ",
+    "district_raw": "Sahibganj ",
+    "state_norm": "JHARKHAND",
+    "state_raw": "Jharkhand"
+  },
+  {
+    "district_norm": "BANGALORE",
+    "district_raw": "Bangalore ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "BANGALORE RURAL",
+    "district_raw": "Bangalore Rural ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "BELGAUM",
+    "district_raw": "Belgaum ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "BELLARY",
+    "district_raw": "Bellary ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "BIJAPUR",
+    "district_raw": "Bijapur ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "CHAMARAJANAGAR",
+    "district_raw": "Chamarajanagar ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "CHIKMAGALUR",
+    "district_raw": "Chikmagalur ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "DAVANAGERE",
+    "district_raw": "Davanagere ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "GULBARGA",
+    "district_raw": "Gulbarga ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "MYSORE",
+    "district_raw": "Mysore ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "SHIMOGA",
+    "district_raw": "Shimoga ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "TUMKUR",
+    "district_raw": "Tumkur ",
+    "state_norm": "KARNATAKA",
+    "state_raw": "Karnataka"
+  },
+  {
+    "district_norm": "LEH(LADAKH)",
+    "district_raw": "Leh(Ladakh) ",
+    "state_norm": "LADAKH",
+    "state_raw": "Ladakh"
+  },
+  {
+    "district_norm": "LAKSHADWEEP",
+    "district_raw": "Lakshadweep ",
+    "state_norm": "LAKSHADWEEP",
+    "state_raw": " Lakshadweep "
+  },
+  {
+    "district_norm": "KHANDWA (EAST NIMAR)",
+    "district_raw": "Khandwa (East Nimar) ",
+    "state_norm": "MADHYA PRADESH",
+    "state_raw": "Madhya Pradesh"
+  },
+  {
+    "district_norm": "KHARGONE (WEST NIMAR)",
+    "district_raw": "Khargone (West Nimar) ",
+    "state_norm": "MADHYA PRADESH",
+    "state_raw": "Madhya Pradesh"
+  },
+  {
+    "district_norm": "NARSIMHAPUR",
+    "district_raw": "Narsimhapur ",
+    "state_norm": "MADHYA PRADESH",
+    "state_raw": "Madhya Pradesh"
+  },
+  {
+    "district_norm": "AHMADNAGAR",
+    "district_raw": "Ahmadnagar ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "AKOLA",
+    "district_raw": "Akola ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "AMRAVATI",
+    "district_raw": "Amravati ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "AURANGABAD",
+    "district_raw": "Aurangabad ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "BHANDARA",
+    "district_raw": "Bhandara ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "BID",
+    "district_raw": "Bid ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "BULDANA",
+    "district_raw": "Buldana ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "CHANDRAPUR",
+    "district_raw": "Chandrapur ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "DHULE",
+    "district_raw": "Dhule ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "GADCHIROLI",
+    "district_raw": "Gadchiroli ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "GONDIYA",
+    "district_raw": "Gondiya ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "HINGOLI",
+    "district_raw": "Hingoli ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "JALGAON",
+    "district_raw": "Jalgaon ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "JALNA",
+    "district_raw": "Jalna ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "KOLHAPUR",
+    "district_raw": "Kolhapur ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "LATUR",
+    "district_raw": "Latur ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "MUMBAI",
+    "district_raw": "Mumbai ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "MUMBAI SUBURBAN",
+    "district_raw": "Mumbai Suburban ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "NAGPUR",
+    "district_raw": "Nagpur ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "NANDED",
+    "district_raw": "Nanded ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "NANDURBAR",
+    "district_raw": "Nandurbar ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "NASHIK",
+    "district_raw": "Nashik ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "OSMANABAD",
+    "district_raw": "Osmanabad ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "PALGHAR",
+    "district_raw": "Palghar ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "PARBHANI",
+    "district_raw": "Parbhani ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "PUNE",
+    "district_raw": "Pune ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "RAIGARH",
+    "district_raw": "Raigarh ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "RATNAGIRI",
+    "district_raw": "Ratnagiri ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "SANGLI",
+    "district_raw": "Sangli ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "SATARA",
+    "district_raw": "Satara ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "SINDHUDURG",
+    "district_raw": "Sindhudurg ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "SOLAPUR",
+    "district_raw": "Solapur ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "THANE",
+    "district_raw": "Thane ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "WARDHA",
+    "district_raw": "Wardha ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "WASHIM",
+    "district_raw": "Washim ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "YAVATMAL",
+    "district_raw": "Yavatmal ",
+    "state_norm": "MAHARASTRA",
+    "state_raw": "Maharastra"
+  },
+  {
+    "district_norm": "EAST JANTIA HILLS",
+    "district_raw": "East Jantia Hills ",
+    "state_norm": "MEGHALAYA",
+    "state_raw": "Meghalaya"
+  },
+  {
+    "district_norm": "RIBHOI",
+    "district_raw": "Ribhoi ",
+    "state_norm": "MEGHALAYA",
+    "state_raw": "Meghalaya"
+  },
+  {
+    "district_norm": "CHANDEL",
+    "district_raw": "Chandel ",
+    "state_norm": "MIZORAM",
+    "state_raw": "Mizoram"
+  },
+  {
+    "district_norm": "CENTRAL",
+    "district_raw": "Central ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "EAST",
+    "district_raw": "East ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "NEW DELHI",
+    "district_raw": "New Delhi ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "NORTH",
+    "district_raw": "North ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "NORTH EAST",
+    "district_raw": "North East ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "NORTH WEST",
+    "district_raw": "North West ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "SHAHDARA",
+    "district_raw": "Shahdara ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "SOUTH",
+    "district_raw": "South ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "SOUTH EAST",
+    "district_raw": "South East ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "SOUTH WEST",
+    "district_raw": "South West ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "WEST",
+    "district_raw": "West ",
+    "state_norm": "NCT OF DELHI",
+    "state_raw": "NCT of Delhi"
+  },
+  {
+    "district_norm": "BAUDH",
+    "district_raw": "Baudh ",
+    "state_norm": "ODISHA",
+    "state_raw": "Odisha"
+  },
+  {
+    "district_norm": "DEBAGARH",
+    "district_raw": "Debagarh ",
+    "state_norm": "ODISHA",
+    "state_raw": "Odisha"
+  },
+  {
+    "district_norm": "NABARANGAPUR",
+    "district_raw": "Nabarangapur ",
+    "state_norm": "ODISHA",
+    "state_raw": "Odisha"
+  },
+  {
+    "district_norm": "SUBARNAPUR",
+    "district_raw": "Subarnapur ",
+    "state_norm": "ODISHA",
+    "state_raw": "Odisha"
+  },
+  {
+    "district_norm": "PUDUCHERRY",
+    "district_raw": "Puducherry ",
+    "state_norm": "PUDUCHERRY",
+    "state_raw": "Puducherry"
+  },
+  {
+    "district_norm": "FIROZPUR",
+    "district_raw": "Firozpur ",
+    "state_norm": "PUNJAB",
+    "state_raw": "Punjab"
+  },
+  {
+    "district_norm": "MUKTSAR",
+    "district_raw": "Muktsar ",
+    "state_norm": "PUNJAB",
+    "state_raw": "Punjab"
+  },
+  {
+    "district_norm": "SAHIBZADA AJIT SINGH NAGAR",
+    "district_raw": "Sahibzada Ajit Singh Nagar ",
+    "state_norm": "PUNJAB",
+    "state_raw": "Punjab"
+  },
+  {
+    "district_norm": "CHITTAURGARH",
+    "district_raw": "Chittaurgarh ",
+    "state_norm": "RAJASTHAN",
+    "state_raw": "Rajasthan"
+  },
+  {
+    "district_norm": "DHAULPUR",
+    "district_raw": "Dhaulpur ",
+    "state_norm": "RAJASTHAN",
+    "state_raw": "Rajasthan"
+  },
+  {
+    "district_norm": "JALOR",
+    "district_raw": "Jalor ",
+    "state_norm": "RAJASTHAN",
+    "state_raw": "Rajasthan"
+  },
+  {
+    "district_norm": "JHUNJHUNUN",
+    "district_raw": "Jhunjhunun ",
+    "state_norm": "RAJASTHAN",
+    "state_raw": "Rajasthan"
+  },
+  {
+    "district_norm": "KANCHEEPURAM",
+    "district_raw": "Kancheepuram ",
+    "state_norm": "TAMIL NADU",
+    "state_raw": "Tamil Nadu"
+  },
+  {
+    "district_norm": "THOOTHUKKUDI",
+    "district_raw": "Thoothukkudi ",
+    "state_norm": "TAMIL NADU",
+    "state_raw": "Tamil Nadu"
+  },
+  {
+    "district_norm": "VILUPPURAM",
+    "district_raw": "Viluppuram ",
+    "state_norm": "TAMIL NADU",
+    "state_raw": "Tamil Nadu"
+  },
+  {
+    "district_norm": "KOMARAM BHEEM ASIFABAD",
+    "district_raw": "Komaram Bheem Asifabad ",
+    "state_norm": "TELANGANA",
+    "state_raw": "Telangana"
+  },
+  {
+    "district_norm": "WARANGAL RURAL",
+    "district_raw": "Warangal Rural ",
+    "state_norm": "TELANGANA",
+    "state_raw": "Telangana"
+  },
+  {
+    "district_norm": "WARANGAL URBAN",
+    "district_raw": "Warangal Urban ",
+    "state_norm": "TELANGANA",
+    "state_raw": "Telangana"
+  },
+  {
+    "district_norm": "ALLAHABAD",
+    "district_raw": "Allahabad ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "BARA BANKI",
+    "district_raw": "Bara Banki ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "FAIZABAD",
+    "district_raw": "Faizabad ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "JYOTIBA PHULE NAGAR",
+    "district_raw": "Jyotiba Phule Nagar ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "KANSHIRAM NAGAR",
+    "district_raw": "Kanshiram Nagar ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "KUSHINAGAR",
+    "district_raw": "Kushinagar ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "MAHAMAYA NAGAR",
+    "district_raw": "Mahamaya Nagar ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "MAHRAJGANJ",
+    "district_raw": "Mahrajganj ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "SANT KABIR NAGAR",
+    "district_raw": "Sant Kabir Nagar ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "SANT RAVIDAS NAGAR (BHADOHI)",
+    "district_raw": "Sant Ravidas Nagar (Bhadohi) ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "SHRAWASTI",
+    "district_raw": "Shrawasti ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "SIDDHARTHNAGAR",
+    "district_raw": "Siddharthnagar ",
+    "state_norm": "UTTAR PRADESH",
+    "state_raw": "Uttar Pradesh"
+  },
+  {
+    "district_norm": "GARHWAL",
+    "district_raw": "Garhwal ",
+    "state_norm": "UTTARAKHAND",
+    "state_raw": "Uttarakhand"
+  },
+  {
+    "district_norm": "HARDWAR",
+    "district_raw": "Hardwar ",
+    "state_norm": "UTTARAKHAND",
+    "state_raw": "Uttarakhand"
+  },
+  {
+    "district_norm": "RUDRAPRAYAG",
+    "district_raw": "Rudraprayag ",
+    "state_norm": "UTTARAKHAND",
+    "state_raw": "Uttarakhand"
+  },
+  {
+    "district_norm": "UDHAM SINGH NAGAR",
+    "district_raw": "Udham Singh Nagar ",
+    "state_norm": "UTTARAKHAND",
+    "state_raw": "Uttarakhand"
+  },
+  {
+    "district_norm": "UTTARKASHI",
+    "district_raw": "Uttarkashi ",
+    "state_norm": "UTTARAKHAND",
+    "state_raw": "Uttarakhand"
+  },
+  {
+    "district_norm": "DAKSHIN DINAJPUR",
+    "district_raw": "Dakshin Dinajpur ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "DARJILING",
+    "district_raw": "Darjiling ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "HAORA",
+    "district_raw": "Haora ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "HUGLI",
+    "district_raw": "Hugli ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "KOCH BIHAR",
+    "district_raw": "Koch Bihar ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "NORTH TWENTY FOUR PARGANA",
+    "district_raw": "North Twenty Four Pargana ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "PASCHIM BARDDHAMAN",
+    "district_raw": "Paschim Barddhaman ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "PASCHIM MEDINIPUR",
+    "district_raw": "Paschim Medinipur ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "PURBA MEDINIPUR",
+    "district_raw": "Purba Medinipur ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "PURULIYA",
+    "district_raw": "Puruliya ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "SOUTH TWENTY FOUR PARGANA",
+    "district_raw": "South Twenty Four Pargana ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  },
+  {
+    "district_norm": "UTTAR DINAJPUR",
+    "district_raw": "Uttar Dinajpur ",
+    "state_norm": "WEST BENGAL",
+    "state_raw": "West Bengal"
+  }
+]
