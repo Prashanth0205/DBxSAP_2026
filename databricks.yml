@@ -8,6 +8,8 @@ variables:
     description: Full Lakebase Postgres database resource name. Obtain by running `databricks postgres list-databases {branch-name}`, select the desired item from the output array and use its .name value. Requires the branch resource name.
   postgres_project:
     description: Full Lakebase Postgres project resource name. Obtain by running `databricks postgres list-projects`, select the desired item from the output array and use its .name value.
+  sql_warehouse_id:
+    description: Databricks SQL Warehouse ID. Obtain via `databricks warehouses list`.
 
 resources:
   apps:
@@ -26,6 +28,10 @@ resources:
             branch: ${var.postgres_branch}
             database: ${var.postgres_database}
             permission: CAN_CONNECT_AND_CREATE
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.sql_warehouse_id}
+            permission: CAN_USE
 
 targets:
   default:
@@ -37,3 +43,4 @@ targets:
       postgres_branch: projects/hackathon-2026/branches/production
       postgres_database: projects/hackathon-2026/branches/production/databases/databricks-postgres
       postgres_project: projects/hackathon-2026
+      sql_warehouse_id: e47ed76813f7ffa0

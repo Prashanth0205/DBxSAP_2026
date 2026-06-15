@@ -13,8 +13,15 @@
     "typecheck": "tsc -b tsconfig.server.json && tsc -b tsconfig.client.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:ast-grep": "appkit lint",
     "format": "prettier --check .",
-    "format:fix": "prettier --write ."
+    "format:fix": "prettier --write .",
+    "postinstall": "npm run typegen",
+    "prebuild": "npm run sync && npm run typegen",
+    "predev": "npm run sync && npm run typegen",
+    "sync": "appkit plugin sync --write --silent",
+    "typegen": "appkit generate-types",
+    "setup": "appkit setup --write"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",

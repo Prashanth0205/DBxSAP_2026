@@ -1,53 +1,30 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { CoverageMap } from '../components/CoverageMap';
-import { CAPABILITY_TAGS, CoverageRegion, CapabilityTag } from '../lib/types';
+import { useAnalyticsQuery } from '@databricks/appkit-ui/react';
+import { CAPABILITY_TAGS, CapabilityTag } from '../lib/types';
 
 export function MapPage() {
   const [capability, setCapability] = useState<CapabilityTag>('dialysis');
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
-  const [allStates, setAllStates] = useState<string[]>([]);
   const [minConfidence, setMinConfidence] = useState(0.5);
-  const [regions, setRegions] = useState<CoverageRegion[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // Load state list on mount
-  useEffect(() => {
-    fetch('/api/states')
-      .then(r => r.json())
-      .then(setAllStates)
-      .catch(() => {
-        // States API not yet available — that's fine during dev
-      });
-  }, []);
+  const statesParams = useMemo(() => ({}), []);
+  const { data: statesData, loading: statesLoading, error: statesError } =
+    useAnalyticsQuery('states', statesParams);
 
-  async function analyze() {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        capability,
-        states: selectedStates.join(','),
-        minConfidence: String(minConfidence),
-      });
-      const data: CoverageRegion[] = await fetch(`/api/coverage?${params}`).then(r => {
-        if (!r.ok) throw new Error(`API error: ${r.statusText}`);
-        return r.json();
-      });
-      setRegions(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load coverage data');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const allStates = useMemo(
+    () => (statesData ?? []).map(r => r.state),
+    [statesData]
+  );
 
-  function handleCityClick(city: string, state: string) {
-    navigate(
-      `/facility/list?city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&capability=${capability}&minConfidence=${minConfidence}`
-    );
+  function browseFacilities() {
+    const params = new URLSearchParams({
+      capability,
+      state: selectedStates[0] ?? '',
+      minConfidence: String(minConfidence),
+    });
+    navigate(`/facility/list?${params}`);
   }
 
   return (
@@ -86,11 +63,15 @@ export function MapPage() {
             onChange={e =>
               setSelectedStates(Array.from(e.target.selectedOptions, o => o.value))
             }
+            disabled={statesLoading}
           >
             {allStates.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          {statesError && (
+            <p className="text-xs text-red-600 mt-1">Failed to load states: {statesError}</p>
+          )}
         </div>
 
         <div>
@@ -109,47 +90,32 @@ export function MapPage() {
         </div>
 
         <button
-          onClick={analyze}
-          disabled={loading}
-          className="px-5 py-2 bg-[#FF3621] text-white rounded-lg font-medium text-sm hover:bg-[#cc2b1a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={browseFacilities}
+          className="px-5 py-2 bg-[#FF3621] text-white rounded-lg font-medium text-sm hover:bg-[#cc2b1a] transition-colors"
         >
-          {loading ? 'Analyzing…' : 'Analyze Coverage'}
+          Browse Facilities
         </button>
       </div>
 
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {/* Map */}
-      {regions.length > 0 ? (
-        <>
-          <CoverageMap regions={regions} onCityClick={handleCityClick} />
-          <p className="text-xs text-gray-400">
-            {regions.length} regions shown. Click any circle to drill into its facilities.
-          </p>
-        </>
-      ) : (
-        !loading && (
-          <div className="h-64 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-gray-400">
-            Select a capability and click <span className="font-semibold mx-1">Analyze Coverage</span> to see the map.
-          </div>
-        )
-      )}
-
-      {loading && (
-        <div className="h-64 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-gray-500">
-          <div className="flex items-center gap-2">
-            <svg className="animate-spin h-5 w-5 text-[#FF3621]" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            Loading coverage data…
+      {/* Coverage extraction pending banner */}
+      <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+        <div className="flex items-start gap-3">
+          <svg className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div className="text-sm">
+            <p className="font-semibold text-amber-900">Coverage extraction pending</p>
+            <p className="text-amber-800 mt-1">
+              The capability-tag heatmap requires running <code className="bg-amber-100 px-1 rounded text-xs">preprocessing/claude_batch.py</code> to
+              extract structured capability tags from facility descriptions. This is a separate batch
+              job (~$20, ~45 min). Until then, the <strong>facility browser</strong> and{' '}
+              <strong>planning workspace</strong> remain fully functional — use them to filter and
+              shortlist facilities by raw capability text.
+            </p>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

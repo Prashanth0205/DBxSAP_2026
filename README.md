@@ -86,6 +86,18 @@ We consume the three Delta-Sharing tables at runtime — full tables are not exp
 - **Feature branches:** `<initials>/<type>-<short-description>` (e.g. `dev-es/docs-readme`)
 - **PRs:** feature branch → `master`, no intermediate `develop` branch
 
+## Deploy
+
+Live app: <https://hackathon-2026-7474659729690555.aws.databricksapps.com/>
+
+```bash
+databricks bundle validate --profile DEFAULT
+databricks bundle deploy   --profile DEFAULT
+databricks apps logs hackathon-2026 --follow --profile DEFAULT
+```
+
+Full instructions, troubleshooting, and local-dev setup: [DEPLOY.md](DEPLOY.md).
+
 ## Team
 
 - Evan Schweizer (`I758378`, evan.schweizer@sap.com)

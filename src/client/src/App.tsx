@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider, NavLink, Outlet } from 'react-router';
 import { MapPage } from './pages/MapPage';
 import { FacilityPage } from './pages/FacilityPage';
+import { FacilityListPage } from './pages/FacilityListPage';
 import { WorkspacePage } from './pages/WorkspacePage';
 import { HomePage } from './pages/HomePage';
 
@@ -40,6 +41,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/', element: <HomePage /> },
       { path: '/map', element: <MapPage /> },
+      { path: '/facility/list', element: <FacilityListPage /> },
       { path: '/facility/:id', element: <FacilityPage /> },
       { path: '/workspace', element: <WorkspacePage /> },
     ],
