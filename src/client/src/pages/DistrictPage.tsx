@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router';
 import {
   Facility, Nfhs5, AssessmentEvent, AssessmentVerdict,
-  VERDICT_META, confidenceBadgeClass,
+  DistrictCoverage, VERDICT_META, confidenceBadgeClass,
 } from '../lib/types';
+import { DistrictChartsStrip } from '../components/DistrictCharts';
 
 export function DistrictPage() {
   const { district } = useParams<{ district: string }>();
@@ -14,6 +15,7 @@ export function DistrictPage() {
 
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [nfhs5, setNfhs5] = useState<Nfhs5 | null>(null);
+  const [coverage, setCoverage] = useState<DistrictCoverage | null>(null);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,10 +31,16 @@ export function DistrictPage() {
     Promise.all([
       fetch(`/api/districts/${encodeURIComponent(district)}/facilities?${qp}`).then(r => r.json()),
       fetch(`/api/districts/${encodeURIComponent(district)}/nfhs5?${state ? `state=${encodeURIComponent(state)}` : ''}`).then(r => r.json()),
+      fetch(`/api/coverage?capability=${capability}${state ? `&state=${encodeURIComponent(state)}` : ''}`).then(r => r.json()),
     ])
-      .then(([facs, nfhs]) => {
+      .then(([facs, nfhs, coverageRows]) => {
         setFacilities(facs);
         setNfhs5(Object.keys(nfhs).length > 0 ? nfhs : null);
+        // find this district's row
+        const row = (coverageRows as DistrictCoverage[]).find(
+          r => r.district.toLowerCase() === district.toLowerCase()
+        ) ?? null;
+        setCoverage(row);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoadingFacilities(false));
@@ -107,6 +115,11 @@ export function DistrictPage() {
 
       {error && (
         <div className="mx-6 mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400">{error}</div>
+      )}
+
+      {/* Visualizations strip */}
+      {coverage && (
+        <DistrictChartsStrip coverage={coverage} nfhs5={nfhs5} />
       )}
 
       {/* Body */}
