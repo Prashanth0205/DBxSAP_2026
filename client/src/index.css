@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+:root {
+  --disha-red: #FF3621;
+  --disha-red-dark: #cc2b1a;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f8f9fa;
+}
+
+/* Leaflet container needs explicit height */
+.leaflet-container {
+  border-radius: 8px;
+}
