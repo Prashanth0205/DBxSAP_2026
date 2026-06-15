@@ -2,13 +2,10 @@ import asyncio
 import json
 import logging
 import os
-from typing import Optional
+import subprocess
+from typing import AsyncIterator, Optional
 
-from gen_ai_hub.proxy.core.proxy_clients import get_proxy_client
-from gen_ai_hub.proxy.langchain.amazon import ChatBedrockConverse
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_core.tools import tool
-from typing import Annotated
+import httpx
 
 from server.warehouse import (
     wh_query,
@@ -21,162 +18,248 @@ from server.warehouse import (
 
 LOGGER = logging.getLogger(__name__)
 
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "anthropic--claude-4.6-sonnet")
+# Databricks Model Serving endpoint — use Claude if quota allows, else Llama 4 Maverick
+LLM_ENDPOINT = os.getenv("DATABRICKS_LLM_ENDPOINT", "databricks-llama-4-maverick")
+DATABRICKS_HOST = os.getenv("DATABRICKS_HOST", "https://dbc-744ddd5a-5ae9.cloud.databricks.com")
+DATABRICKS_PROFILE = os.getenv("DATABRICKS_CONFIG_PROFILE", "prashanth.vidhya.ravi.kumar@sap.com")
+
 MAX_ITERATIONS = 10
 _RETRY_DELAYS = [5, 10, 15]
 
 # ─────────────────────────────────────────────
-# LLM singleton
+# OAuth token — fetched via Databricks CLI, cached until near-expiry
 # ─────────────────────────────────────────────
-_LLM: Optional[ChatBedrockConverse] = None
-_LLM_LOCK: Optional[asyncio.Lock] = None
+_token_cache: dict = {"token": None, "expires_at": 0.0}
 
 
-def _get_llm_lock() -> asyncio.Lock:
-    global _LLM_LOCK
-    if _LLM_LOCK is None:
-        _LLM_LOCK = asyncio.Lock()
-    return _LLM_LOCK
+def _get_token() -> str:
+    import time
+    now = time.time()
+    if _token_cache["token"] and now < _token_cache["expires_at"] - 60:
+        return _token_cache["token"]
+    result = subprocess.run(
+        ["databricks", "auth", "token", "--profile", DATABRICKS_PROFILE],
+        capture_output=True, text=True, check=True,
+    )
+    data = json.loads(result.stdout)
+    _token_cache["token"] = data["access_token"]
+    _token_cache["expires_at"] = now + data.get("expires_in", 3600)
+    LOGGER.debug("agent | refreshed Databricks OAuth token")
+    return _token_cache["token"]
 
 
-async def _get_llm(tools: list) -> ChatBedrockConverse:
-    global _LLM
-    if _LLM is not None:
-        return _LLM
-    async with _get_llm_lock():
-        if _LLM is None:
-            proxy_client = get_proxy_client("gen-ai-hub")
-            _LLM = ChatBedrockConverse(
-                proxy_client=proxy_client,
-                model_name=CLAUDE_MODEL,
-                temperature=0.1,
-                max_tokens=4096,
-            ).bind_tools(tools)
-            LOGGER.info(f"agent | LLM ready — model={CLAUDE_MODEL}")
-    return _LLM
+# ─────────────────────────────────────────────
+# LLM calls via direct HTTP to Databricks Model Serving
+# Supports OpenAI-compatible tool/function calling
+# ─────────────────────────────────────────────
+
+def _call_llm(
+    messages: list[dict],
+    tools: Optional[list[dict]] = None,
+    max_tokens: int = 4096,
+    temperature: float = 0.1,
+) -> dict:
+    token = _get_token()
+    url = f"{DATABRICKS_HOST}/serving-endpoints/{LLM_ENDPOINT}/invocations"
+    payload: dict = {"messages": messages, "max_tokens": max_tokens, "temperature": temperature}
+    if tools:
+        payload["tools"] = tools
+    resp = httpx.post(
+        url,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=60,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"LLM call failed [{resp.status_code}]: {resp.text[:300]}")
+    return resp.json()
 
 
-async def _invoke_with_retry(llm: ChatBedrockConverse, messages: list) -> AIMessage:
+async def _call_llm_async(
+    messages: list[dict],
+    tools: Optional[list[dict]] = None,
+    max_tokens: int = 4096,
+    temperature: float = 0.1,
+) -> dict:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, lambda: _call_llm(messages, tools, max_tokens, temperature)
+    )
+
+
+async def _call_with_retry(
+    messages: list[dict],
+    tools: Optional[list[dict]] = None,
+    max_tokens: int = 4096,
+    temperature: float = 0.1,
+) -> dict:
     for attempt, delay in enumerate(_RETRY_DELAYS + [None]):
         try:
-            return await llm.ainvoke(messages)
+            return await _call_llm_async(messages, tools, max_tokens, temperature)
         except Exception as e:
-            if "429" not in str(e) or delay is None:
+            if ("429" not in str(e) and "rate" not in str(e).lower()) or delay is None:
                 raise
             LOGGER.warning(f"agent | rate limited, retrying in {delay}s (attempt {attempt + 1})")
             await asyncio.sleep(delay)
     raise RuntimeError("unreachable")
 
 
+def _extract_content(response: dict) -> str:
+    choices = response.get("choices", [])
+    return choices[0].get("message", {}).get("content") or "" if choices else ""
+
+
+def _extract_tool_calls(response: dict) -> list[dict]:
+    choices = response.get("choices", [])
+    return choices[0].get("message", {}).get("tool_calls") or [] if choices else []
+
+
+def _stop_reason(response: dict) -> str:
+    choices = response.get("choices", [])
+    return choices[0].get("finish_reason", "stop") if choices else "stop"
+
+
 # ─────────────────────────────────────────────
-# Tool definitions
+# Tool schemas (OpenAI function-calling format)
 # ─────────────────────────────────────────────
 
-@tool
-def query_database(
-    sql: Annotated[str, "A read-only Spark SQL SELECT statement against the Databricks SQL warehouse."],
-) -> str:
-    """
-    Execute a read-only Spark SQL query against the Databricks SQL warehouse.
+QUERY_DATABASE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "query_database",
+        "description": (
+            "Execute a read-only Spark SQL SELECT against the Databricks SQL warehouse. "
+            "Available tables: "
+            "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.facilities "
+            "(unique_id, name, specialties, capability, description, organization_type, "
+            "address_city, address_stateOrRegion, address_zipOrPostcode, latitude, longitude, "
+            "numberDoctors, phone_numbers, source, yearEstablished, equipment, procedure), "
+            "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.india_post_pincode_directory "
+            "(pincode, district, statename, officename), "
+            "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.nfhs_5_district_health_indicators "
+            "(district_name, state_ut, institutional_birth_5y_pct, "
+            "child_u5_who_are_stunted_height_for_age_18_pct, "
+            "births_attended_by_skilled_hp_5y_10_pct, "
+            "mothers_who_had_at_least_4_anc_visits_lb5y_pct, "
+            "hh_electricity_pct, hh_improved_water_pct, "
+            "hh_member_covered_health_insurance_pct, "
+            "w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct, "
+            "w15_plus_with_high_141_160_mg_dl_blood_sugar_pct, "
+            "m15_plus_with_high_141_160_mg_dl_blood_sugar_pct, "
+            "women_age_30_49_years_ever_undergone_a_cervical_screen_pct, "
+            "women_age_30_49_years_ever_undergone_a_breast_exam_pct). "
+            "Use Spark SQL syntax: LOWER(col) LIKE '%foo%' not ILIKE, CAST(x AS DOUBLE) not ::float. "
+            "Only SELECT or WITH...SELECT allowed."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"sql": {"type": "string", "description": "A read-only Spark SQL SELECT statement."}},
+            "required": ["sql"],
+        },
+    },
+}
 
-    Available tables (fully qualified):
-      - databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.facilities
-          (unique_id, name, specialties, capability, description, organization_type,
-           address_city, address_stateOrRegion, address_zipOrPostcode,
-           latitude, longitude, numberDoctors, phone_numbers, source, yearEstablished, equipment, procedure)
-      - databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.india_post_pincode_directory
-          (pincode, district, statename, officename)
-      - databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.nfhs_5_district_health_indicators
-          (district_name, state_ut, institutional_birth_5y_pct,
-           child_u5_who_are_stunted_height_for_age_18_pct,
-           births_attended_by_skilled_hp_5y_10_pct,
-           mothers_who_had_at_least_4_anc_visits_lb5y_pct,
-           hh_electricity_pct, hh_improved_water_pct,
-           hh_member_covered_health_insurance_pct,
-           w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct,
-           w15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
-           m15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
-           women_age_30_49_years_ever_undergone_a_cervical_screen_pct,
-           women_age_30_49_years_ever_undergone_a_breast_exam_pct)
+WEB_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": (
+            "Search the web for healthcare information about India. "
+            "Use ONE broad state-level search covering the capability gap across all districts. "
+            "Returns top results with title, url, and snippet."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"query": {"type": "string", "description": "Search query about healthcare in India."}},
+            "required": ["query"],
+        },
+    },
+}
 
-    Spark SQL syntax notes (NOT Postgres):
-      - Use LOWER(col) LIKE LOWER('%foo%') instead of ILIKE.
-      - Use CAST(x AS DOUBLE) / CAST(x AS STRING), not ::float / ::text.
-      - String columns may contain literal 'null' or '' for missing data —
-        always filter `col NOT IN ('', 'null')`.
-      - NFHS-5 has spelling quirks: state spelled "Maharastra" (no 'h'),
-        " Lakshadweep " has leading space. Pincode dir uses UPPERCASE +
-        'AND' (e.g. "JAMMU AND KASHMIR"); NFHS uses Title case + '&'.
-        Normalize both sides before joining.
-      - Joins: facilities.address_zipOrPostcode = CAST(pincode_dir.pincode AS STRING)
-        bridges facility → district. Then join district to NFHS-5.
-
-    Only SELECT (and WITH … SELECT) is allowed.
-    """
-    s = sql.strip().upper()
-    if not (s.startswith("SELECT") or s.startswith("WITH")):
-        return json.dumps({"error": "Only SELECT or WITH … SELECT statements are allowed."})
-    try:
-        rows = wh_query(sql)
-        return json.dumps(rows[:50])
-    except Exception as e:
-        LOGGER.error(f"agent | query_database failed: {e}")
-        return json.dumps({"error": str(e)})
+ASSESSMENT_TOOLS = [QUERY_DATABASE_TOOL, WEB_SEARCH_TOOL]
 
 
-@tool
-def web_search(
-    query: Annotated[str, "Search query about healthcare facilities or health statistics in India."],
-) -> str:
-    """
-    Search the web for information about healthcare in India.
-    Use for ONE broad state-level search covering the capability gap across all districts.
-    Returns top results with title, url, and snippet.
-    """
-    tavily_key = os.getenv("TAVILY_API_KEY", "")
-    if not tavily_key:
-        LOGGER.warning("agent | TAVILY_API_KEY not set — returning mock web_search result")
+# ─────────────────────────────────────────────
+# Tool execution
+# ─────────────────────────────────────────────
+
+def _execute_tool(name: str, args: dict) -> str:
+    if name == "query_database":
+        sql = args.get("sql", "")
+        s = sql.strip().upper()
+        if not (s.startswith("SELECT") or s.startswith("WITH")):
+            return json.dumps({"error": "Only SELECT or WITH … SELECT statements are allowed."})
+        try:
+            rows = wh_query(sql)
+            return json.dumps(rows[:50])
+        except Exception as e:
+            LOGGER.error(f"agent | query_database failed: {e}")
+            return json.dumps({"error": str(e)})
+
+    if name == "web_search":
+        query = args.get("query", "")
+
+        # Tier 1 — Tavily (domain-filtered to gov health registries)
+        tavily_key = os.getenv("TAVILY_API_KEY", "")
+        if tavily_key:
+            try:
+                resp = httpx.post(
+                    "https://api.tavily.com/search",
+                    json={
+                        "api_key": tavily_key,
+                        "query": query,
+                        "search_depth": "basic",
+                        "max_results": 5,
+                        "include_domains": [
+                            "nhp.gov.in", "nha.gov.in", "abdm.gov.in",
+                            "mohfw.gov.in", "hmis.gov.in", "nabh.co",
+                        ],
+                    },
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                results = resp.json().get("results", [])
+                if results:
+                    LOGGER.info(f"agent | Tavily returned {len(results)} results")
+                    return json.dumps([
+                        {"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("content", "")[:300]}
+                        for r in results
+                    ])
+                LOGGER.warning("agent | Tavily returned 0 results, trying DuckDuckGo")
+            except Exception as e:
+                LOGGER.warning(f"agent | Tavily failed ({e}), trying DuckDuckGo")
+
+        # Tier 2 — DuckDuckGo (free, no key required)
+        try:
+            from ddgs import DDGS
+            results = list(DDGS().text(query, max_results=5))
+            if results:
+                LOGGER.info(f"agent | DuckDuckGo returned {len(results)} results")
+                return json.dumps([
+                    {"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")[:300]}
+                    for r in results
+                ])
+            LOGGER.warning("agent | DuckDuckGo returned 0 results")
+        except Exception as e:
+            LOGGER.warning(f"agent | DuckDuckGo failed ({e}), using empty fallback")
+
+        # Tier 3 — graceful empty result so the agent loop never crashes
+        LOGGER.warning(f"agent | All web search providers failed for: {query!r}")
         return json.dumps([{
-            "title": "Web search not configured",
+            "title": "No web search results available",
             "url": "",
-            "snippet": "Set TAVILY_API_KEY to enable real web search verification.",
+            "snippet": (
+                "Web search could not be completed. "
+                "Assessment will rely on database evidence only. "
+                f"Query attempted: {query}"
+            ),
         }])
-    try:
-        import httpx
-        resp = httpx.post(
-            "https://api.tavily.com/search",
-            json={
-                "api_key": tavily_key,
-                "query": query,
-                "search_depth": "basic",
-                "max_results": 5,
-                "include_domains": [
-                    "nhp.gov.in", "nha.gov.in", "abdm.gov.in",
-                    "mohfw.gov.in", "hmis.gov.in", "nabh.co",
-                ],
-            },
-            timeout=15,
-        )
-        results = resp.json().get("results", [])
-        return json.dumps([
-            {"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("content", "")[:300]}
-            for r in results
-        ])
-    except Exception as e:
-        LOGGER.error(f"agent | web_search failed: {e}")
-        return json.dumps({"error": str(e)})
 
-
-ASSESSMENT_TOOLS = [query_database, web_search]
+    return json.dumps({"error": f"Unknown tool: {name}"})
 
 
 # ─────────────────────────────────────────────
 # Option C: Hybrid Batch Assessment
-#
-# Flow:
-#   Step 1 — DB Agent: one SQL call, fetch all facilities + nfhs5 for the state
-#   Step 2 — Web Agent: ONE search for the state + capability
-#   Step 3 — Orchestrator LLM: single batch prompt → verdicts for all districts at once
 # ─────────────────────────────────────────────
 
 BATCH_SYSTEM_PROMPT = """You are a medical desert assessment orchestrator for India.
@@ -211,80 +294,63 @@ async def run_batch_assessment(
     capability: str,
     districts: list[dict],
 ) -> dict[str, dict]:
-    """
-    Option C hybrid batch flow.
-
-    Args:
-        state:      e.g. "Maharashtra"
-        capability: e.g. "maternity"
-        districts:  list of coverage rows from /api/coverage (already has gap_score, confidence, nfhs5 cols)
-
-    Returns:
-        dict mapping district name → assessment result
-    """
     if not districts:
         return {}
 
-    LOGGER.info(f"batch | starting assessment for {len(districts)} districts in {state} [{capability}]")
-
-    # ── Step 1: DB Agent ──────────────────────────────────────────────────────
-    # Fetch NFHS-5 rows for all districts in the state via the warehouse, with
-    # alias resolution (NFHS spells "Maharastra", uses "Bid" for "Beed", etc.)
-    district_names = [d["district"] for d in districts]
+    LOGGER.info(f"batch | {len(districts)} districts in {state} [{capability}]")
     state_canon = normalize_state(state)
 
+    # ── Step 1: DB — fetch NFHS-5 for all districts in one query ─────────────
     try:
         nfhs5_rows = wh_query(
             f"""
             WITH {alias_ctes()}
             SELECT
-              district_canon AS district_canon,
-              CAST(institutional_birth_5y_pct                                   AS DOUBLE) AS institutional_birth_5y_pct,
-              CAST(births_attended_by_skilled_hp_5y_10_pct                     AS DOUBLE) AS births_attended_by_skilled_hp_5y_10_pct,
-              CAST(mothers_who_had_at_least_4_anc_visits_lb5y_pct              AS DOUBLE) AS mothers_who_had_at_least_4_anc_visits_lb5y_pct,
-              CAST(child_u5_who_are_stunted_height_for_age_18_pct              AS DOUBLE) AS child_u5_who_are_stunted_height_for_age_18_pct,
-              CAST(hh_electricity_pct                                          AS DOUBLE) AS hh_electricity_pct,
-              CAST(hh_improved_water_pct                                       AS DOUBLE) AS hh_improved_water_pct,
-              CAST(hh_member_covered_health_insurance_pct                      AS DOUBLE) AS hh_member_covered_health_insurance_pct,
+              district_canon,
+              CAST(institutional_birth_5y_pct AS DOUBLE) AS institutional_birth_5y_pct,
+              CAST(births_attended_by_skilled_hp_5y_10_pct AS DOUBLE) AS births_attended_by_skilled_hp_5y_10_pct,
+              CAST(mothers_who_had_at_least_4_anc_visits_lb5y_pct AS DOUBLE) AS mothers_who_had_at_least_4_anc_visits_lb5y_pct,
+              CAST(child_u5_who_are_stunted_height_for_age_18_pct AS DOUBLE) AS child_u5_who_are_stunted_height_for_age_18_pct,
+              CAST(hh_electricity_pct AS DOUBLE) AS hh_electricity_pct,
+              CAST(hh_improved_water_pct AS DOUBLE) AS hh_improved_water_pct,
+              CAST(hh_member_covered_health_insurance_pct AS DOUBLE) AS hh_member_covered_health_insurance_pct,
               CAST(w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct AS DOUBLE) AS w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct,
-              CAST(w15_plus_with_high_141_160_mg_dl_blood_sugar_pct            AS DOUBLE) AS w15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
-              CAST(m15_plus_with_high_141_160_mg_dl_blood_sugar_pct            AS DOUBLE) AS m15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
-              CAST(women_age_30_49_years_ever_undergone_a_cervical_screen_pct  AS DOUBLE) AS women_age_30_49_years_ever_undergone_a_cervical_screen_pct,
-              CAST(women_age_30_49_years_ever_undergone_a_breast_exam_pct      AS DOUBLE) AS women_age_30_49_years_ever_undergone_a_breast_exam_pct
+              CAST(w15_plus_with_high_141_160_mg_dl_blood_sugar_pct AS DOUBLE) AS w15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
+              CAST(m15_plus_with_high_141_160_mg_dl_blood_sugar_pct AS DOUBLE) AS m15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
+              CAST(women_age_30_49_years_ever_undergone_a_cervical_screen_pct AS DOUBLE) AS women_age_30_49_years_ever_undergone_a_cervical_screen_pct,
+              CAST(women_age_30_49_years_ever_undergone_a_breast_exam_pct AS DOUBLE) AS women_age_30_49_years_ever_undergone_a_breast_exam_pct
             FROM nfhs_canon
             WHERE state_canon = :p1
             """,
             [state_canon],
         )
         nfhs5_by_district = {r["district_canon"].upper(): r for r in nfhs5_rows}
-        LOGGER.info(f"batch | DB Agent returned {len(nfhs5_rows)} NFHS-5 rows for {state_canon}")
+        LOGGER.info(f"batch | DB returned {len(nfhs5_rows)} NFHS-5 rows for {state_canon}")
     except Exception as e:
-        LOGGER.warning(f"batch | DB Agent NFHS-5 query failed: {e}")
+        LOGGER.warning(f"batch | DB NFHS-5 query failed: {e}")
         nfhs5_by_district = {}
 
-    # ── Step 2: Web Agent ─────────────────────────────────────────────────────
-    # ONE web search for the entire state
-    web_query = f"{capability} hospital shortage desert {state} India NHA HMIS registry 2024"
-    web_results_str = web_search.invoke({"query": web_query})
+    # ── Step 2: Web — ONE search for the whole state ──────────────────────────
+    web_query_str = f"{capability} hospital shortage desert {state} India NHA HMIS registry 2024"
+    web_results_str = _execute_tool("web_search", {"query": web_query_str})
     try:
         web_results = json.loads(web_results_str)
     except Exception:
         web_results = []
-    LOGGER.info(f"batch | Web Agent returned {len(web_results)} results for query: {web_query}")
+    LOGGER.info(f"batch | web search returned {len(web_results)} results")
 
-    # ── Step 3: Orchestrator LLM ──────────────────────────────────────────────
-    # Build a single rich context block for all districts
+    # ── Step 3: Orchestrator LLM — all districts in one prompt ───────────────
     district_context = []
     for d in districts:
         name = d["district"]
         nfhs5 = nfhs5_by_district.get(name.upper(), {})
         district_context.append({
             "district": name,
-            "state": d["state"],
-            "total_facilities": d["total_facilities"],
-            "matching_facilities": d["matching_facilities"],
-            "gap_score": d["gap_score"],
-            "data_confidence": d["confidence"],
+            "state": d.get("state", state),
+            "total_facilities": d.get("total_facilities", 0),
+            "matching_facilities": d.get("matching_facilities", 0),
+            "gap_score": d.get("gap_score", 0.0),
+            "data_confidence": d.get("confidence", 0.0),
             "nfhs5": {
                 "institutional_birth_pct": nfhs5.get("institutional_birth_5y_pct"),
                 "child_stunting_pct": nfhs5.get("child_u5_who_are_stunted_height_for_age_18_pct"),
@@ -292,45 +358,30 @@ async def run_batch_assessment(
                 "anc_4plus_visits_pct": nfhs5.get("mothers_who_had_at_least_4_anc_visits_lb5y_pct"),
                 "electricity_pct": nfhs5.get("hh_electricity_pct"),
                 "health_insurance_pct": nfhs5.get("hh_member_covered_health_insurance_pct"),
-                "hypertension_pct": nfhs5.get("w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct"),
                 "blood_sugar_women_pct": nfhs5.get("w15_plus_with_high_141_160_mg_dl_blood_sugar_pct"),
-                "cervical_screening_pct": nfhs5.get("women_age_30_49_years_ever_undergone_a_cervical_screen_pct"),
             },
         })
 
-    user_message = (
-        f"Capability: {capability}\n"
-        f"State: {state}\n\n"
-        f"District data ({len(district_context)} districts):\n"
-        f"{json.dumps(district_context, indent=2)}\n\n"
-        f"Web search findings for {state} {capability} healthcare:\n"
-        f"{json.dumps(web_results, indent=2)}\n\n"
-        f"Assess every district and return the JSON array."
-    )
-
     messages = [
-        SystemMessage(content=BATCH_SYSTEM_PROMPT),
-        HumanMessage(content=user_message),
+        {"role": "system", "content": BATCH_SYSTEM_PROMPT},
+        {"role": "user", "content": (
+            f"Capability: {capability}\nState: {state}\n\n"
+            f"District data ({len(district_context)} districts):\n"
+            f"{json.dumps(district_context, indent=2)}\n\n"
+            f"Web search findings:\n{json.dumps(web_results, indent=2)}\n\n"
+            f"Assess every district and return the JSON array."
+        )},
     ]
 
     try:
-        proxy_client = get_proxy_client("gen-ai-hub")
-        # Orchestrator LLM — no tools, just synthesis
-        orchestrator = ChatBedrockConverse(
-            proxy_client=proxy_client,
-            model_name=CLAUDE_MODEL,
-            temperature=0.1,
-            max_tokens=4096,
-        )
-        response: AIMessage = await _invoke_with_retry(orchestrator, messages)
-        content = response.content if isinstance(response.content, str) else ""
+        response = await _call_with_retry(messages, tools=None, max_tokens=4096)
+        content = _extract_content(response)
         clean = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         results: list[dict] = json.loads(clean)
-        LOGGER.info(f"batch | Orchestrator returned {len(results)} district assessments")
+        LOGGER.info(f"batch | orchestrator returned {len(results)} assessments")
         return {r["district"]: r for r in results}
     except Exception as e:
-        LOGGER.error(f"batch | Orchestrator LLM failed: {e}")
-        # Graceful fallback — return data_hole for all districts
+        LOGGER.error(f"batch | orchestrator failed: {e}")
         return {
             d["district"]: {
                 "district": d["district"],
@@ -345,22 +396,15 @@ async def run_batch_assessment(
 
 
 # ─────────────────────────────────────────────
-# Per-district SSE stream (used by detail drawer)
-# Thin wrapper — runs a single-district batch and streams it
+# Per-district SSE stream (detail drawer)
 # ─────────────────────────────────────────────
 
 async def run_assessment(district: str, state: str, capability: str):
-    """
-    Streams SSE events for a single district assessment.
-    Reuses the batch engine with a single-district input.
-    """
     def sse(event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
-    # Yield progress so the drawer shows activity immediately
-    yield sse("tool_call", {"tool": "query_database", "input": f"SELECT nfhs5 data for {district}, {state}"})
+    yield sse("tool_call", {"tool": "query_database", "input": f"NFHS-5 data for {district}, {state}"})
 
-    # Fetch the single district's coverage row from the warehouse
     state_canon = normalize_state(state)
     district_canon = normalize_state(district)
     cap_pattern = f"%{capability.lower()}%"
@@ -392,8 +436,8 @@ async def run_assessment(district: str, state: str, capability: str):
                  CASE WHEN fac.longitude IS NOT NULL THEN 1 ELSE 0 END +
                  CASE WHEN fac.description IS NOT NULL AND LENGTH(fac.description) > 20 THEN 1 ELSE 0 END +
                  CASE WHEN fac.numberDoctors IS NOT NULL AND fac.numberDoctors NOT IN ('', 'null') THEN 1 ELSE 0 END +
-                 CASE WHEN fac.phone_numbers  IS NOT NULL AND fac.phone_numbers  NOT IN ('', 'null', '[]') THEN 1 ELSE 0 END +
-                 CASE WHEN fac.source         IS NOT NULL AND fac.source         NOT IN ('', 'null') THEN 1 ELSE 0 END
+                 CASE WHEN fac.phone_numbers IS NOT NULL AND fac.phone_numbers NOT IN ('', 'null', '[]') THEN 1 ELSE 0 END +
+                 CASE WHEN fac.source IS NOT NULL AND fac.source NOT IN ('', 'null') THEN 1 ELSE 0 END
                 ) / 6.0
               ), 2) AS DOUBLE) AS confidence
             FROM fac
@@ -420,7 +464,7 @@ async def run_assessment(district: str, state: str, capability: str):
                 "gap_score": 0.0, "confidence": 0.0,
             }
     except Exception as e:
-        LOGGER.warning(f"assessment SSE | warehouse query failed: {e}")
+        LOGGER.warning(f"SSE | warehouse query failed: {e}")
         district_row = {
             "district": district, "state": state,
             "total_facilities": 0, "matching_facilities": 0,
@@ -432,28 +476,15 @@ async def run_assessment(district: str, state: str, capability: str):
         "rows": district_row.get("total_facilities", 0),
         "preview": f"matching: {district_row.get('matching_facilities', 0)} / {district_row.get('total_facilities', 0)}",
     })
-
     yield sse("tool_call", {"tool": "web_search", "input": f"{capability} hospital {district} {state} registry"})
 
-    results = await run_batch_assessment(
-        state=state,
-        capability=capability,
-        districts=[district_row],
-    )
+    results = await run_batch_assessment(state=state, capability=capability, districts=[district_row])
     district_result = results.get(district, {
-        "verdict": "data_hole",
-        "verdict_label": "No Assessment",
-        "confidence": "low",
-        "summary": "Assessment could not be completed.",
-        "sources": [],
+        "verdict": "data_hole", "verdict_label": "No Assessment",
+        "confidence": "low", "summary": "Assessment could not be completed.", "sources": [],
     })
 
-    yield sse("tool_result", {
-        "tool": "web_search",
-        "rows": 1,
-        "preview": "web search complete",
-    })
-
+    yield sse("tool_result", {"tool": "web_search", "rows": 1, "preview": "web search complete"})
     yield sse("assessment", district_result)
     yield sse("done", {})
 
@@ -464,12 +495,12 @@ async def run_assessment(district: str, state: str, capability: str):
 
 VERIFY_SYSTEM_PROMPT = """You are a healthcare facility verification agent for India.
 
-Given a facility's name, location, and claimed capabilities, search the web to verify:
+Given a facility's name, location, and claimed capabilities, use the web_search tool to verify:
 1. Does the facility exist and appear operational?
 2. Which claimed capabilities are confirmed by external sources?
 3. Is it listed on any government registry (NHA, NABH, HMIS, Ayushman Bharat)?
 
-Output ONLY a JSON object:
+After searching, output ONLY a JSON object (no markdown):
 {
   "verdict": "confirmed | partial | unverified",
   "verified_capabilities": ["list"],
@@ -482,55 +513,54 @@ confidence_delta: confirmed → +0.3 to +0.5, partial → +0.1 to +0.2, unverifi
 
 
 async def run_verification(facility: dict) -> dict:
-    """Run a web-search verification for a single facility."""
     capabilities = " | ".join(filter(None, [
         facility.get("specialties", ""),
         facility.get("capability", ""),
     ]))
-    user_message = (
-        f"Facility: {facility.get('name', 'Unknown')}\n"
-        f"Location: {facility.get('address_city', '')}, {facility.get('address_state', '')}, India\n"
-        f"Claimed capabilities: {capabilities}\n"
-        f"Description: {str(facility.get('description', ''))[:300]}\n\n"
-        f"Search the web and return your verification JSON."
-    )
-
     messages = [
-        SystemMessage(content=VERIFY_SYSTEM_PROMPT),
-        HumanMessage(content=user_message),
+        {"role": "system", "content": VERIFY_SYSTEM_PROMPT},
+        {"role": "user", "content": (
+            f"Facility: {facility.get('name', 'Unknown')}\n"
+            f"Location: {facility.get('address_city', '')}, {facility.get('address_state', '')}, India\n"
+            f"Claimed capabilities: {capabilities}\n"
+            f"Description: {str(facility.get('description', ''))[:300]}\n\n"
+            f"Search the web and return your verification JSON."
+        )},
     ]
 
-    try:
-        proxy_client = get_proxy_client("gen-ai-hub")
-        llm = ChatBedrockConverse(
-            proxy_client=proxy_client,
-            model_name=CLAUDE_MODEL,
-            temperature=0.1,
-            max_tokens=512,
-        ).bind_tools([web_search])
-    except Exception as e:
-        LOGGER.error(f"agent | verification LLM init failed: {e}")
-        return {"verdict": "unverified", "verified_capabilities": [],
-                "unverified_capabilities": [], "sources": [], "confidence_delta": 0.0}
+    for iteration in range(5):
+        try:
+            response = await _call_with_retry(messages, tools=[WEB_SEARCH_TOOL], max_tokens=1024)
+        except Exception as e:
+            LOGGER.error(f"verify | LLM call failed: {e}")
+            break
 
-    for _ in range(5):
-        response: AIMessage = await _invoke_with_retry(llm, messages)
-        if not response.tool_calls:
-            content = response.content if isinstance(response.content, str) else ""
+        tool_calls = _extract_tool_calls(response)
+        finish = _stop_reason(response)
+
+        if not tool_calls or finish == "stop":
+            content = _extract_content(response)
             try:
                 clean = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
                 return json.loads(clean)
             except json.JSONDecodeError:
-                return {"verdict": "unverified", "verified_capabilities": [],
-                        "unverified_capabilities": [], "sources": [], "confidence_delta": 0.0}
+                break
 
-        tool_messages = []
-        for tc in response.tool_calls:
-            result_str = web_search.invoke(tc["args"]) if tc["name"] == "web_search" else json.dumps({"error": "unknown tool"})
-            tool_messages.append(ToolMessage(content=result_str, tool_call_id=tc["id"]))
-
-        messages.append(response)
-        messages.extend(tool_messages)
+        messages.append({"role": "assistant", "content": None, "tool_calls": tool_calls})
+        for tc in tool_calls:
+            fn = tc.get("function", {})
+            name = fn.get("name", "")
+            try:
+                args = json.loads(fn.get("arguments", "{}"))
+            except json.JSONDecodeError:
+                args = {}
+            result_str = _execute_tool(name, args)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id", f"call_{iteration}"),
+                "content": result_str,
+            })
 
     return {"verdict": "unverified", "verified_capabilities": [],
             "unverified_capabilities": [], "sources": [], "confidence_delta": 0.0}
+
