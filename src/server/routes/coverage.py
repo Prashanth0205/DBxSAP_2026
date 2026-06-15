@@ -85,11 +85,11 @@ SELECT
     END AS DOUBLE
   ) AS gap_score,
   CAST(a.confidence AS DOUBLE) AS confidence,
-  CAST(n.institutional_birth_5y_pct                                  AS DOUBLE) AS institutional_birth_5y_pct,
-  CAST(n.child_u5_who_are_stunted_height_for_age_18_pct              AS DOUBLE) AS child_stunting_pct,
-  CAST(n.hh_electricity_pct                                          AS DOUBLE) AS hh_electricity_pct,
-  CAST(n.hh_improved_water_pct                                       AS DOUBLE) AS hh_improved_water_pct,
-  CAST(n.hh_use_improved_sanitation_pct                              AS DOUBLE) AS hh_use_improved_sanitation_pct
+  TRY_CAST(n.institutional_birth_5y_pct                              AS DOUBLE) AS institutional_birth_5y_pct,
+  TRY_CAST(n.child_u5_who_are_stunted_height_for_age_18_pct          AS DOUBLE) AS child_stunting_pct,
+  TRY_CAST(n.hh_electricity_pct                                      AS DOUBLE) AS hh_electricity_pct,
+  TRY_CAST(n.hh_improved_water_pct                                   AS DOUBLE) AS hh_improved_water_pct,
+  TRY_CAST(n.hh_use_improved_sanitation_pct                          AS DOUBLE) AS hh_use_improved_sanitation_pct
 FROM agg a
 LEFT JOIN nfhs_canon n
   ON a.state_canon    = n.state_canon
