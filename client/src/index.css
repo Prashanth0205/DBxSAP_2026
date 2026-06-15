@@ -1,16 +1,52 @@
 @import "tailwindcss";
 
-:root {
-  --disha-red: #FF3621;
-  --disha-red-dark: #cc2b1a;
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
 }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f8f9fa;
+  background: #0e1117;
+  color: #e2e8f0;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Leaflet container needs explicit height */
+/* Map fills its container */
 .leaflet-container {
-  border-radius: 8px;
+  background: #111318;
+  font-family: inherit;
 }
+
+/* Remove focus outline on clicked regions */
+.leaflet-container path:focus {
+  outline: none;
+}
+
+/* Dark tooltip */
+.leaflet-tooltip {
+  background: #fff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18) !important;
+  padding: 8px 10px !important;
+  color: #1e293b !important;
+}
+.leaflet-tooltip-top::before { border-top-color: #e2e8f0 !important; }
+
+/* Hide leaflet attribution (keeps map clean for demo) */
+.leaflet-control-attribution {
+  font-size: 9px !important;
+  opacity: 0.35;
+}
+
+/* Scrollbar — dark */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+/* Sidebar selects on dark bg */
+select option { background: #1a1d23; color: #cbd5e1; }
