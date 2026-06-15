@@ -1,12 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { appKitTypesPlugin } from '@databricks/appkit';
 import path from 'path';
 
 export default defineConfig({
   root: __dirname,
-  plugins: [react(), tailwindcss(), appKitTypesPlugin()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       '@shared': path.resolve(__dirname, '../shared'),
@@ -18,7 +17,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, './dist'),
+    outDir: 'dist',
     emptyOutDir: true,
   },
 });
