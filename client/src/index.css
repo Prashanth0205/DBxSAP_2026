@@ -20,6 +20,11 @@ body {
   font-family: inherit;
 }
 
+/* Remove focus outline on clicked regions */
+.leaflet-container path:focus {
+  outline: none;
+}
+
 /* Dark tooltip */
 .leaflet-tooltip {
   background: #fff !important;

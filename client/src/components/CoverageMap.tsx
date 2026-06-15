@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { DistrictCoverage, gapColor } from '../lib/types';
 
@@ -8,18 +8,117 @@ interface Props {
   onDistrictClick: (district: string, state: string) => void;
 }
 
-const STRIPE_ID = 'sparse-stripe';
+// Normalise district names for fuzzy matching
+function norm(s: string) {
+  return s.toLowerCase().replace(/[^a-z]/g, '');
+}
 
-function StripePatternDef() {
-  return (
-    <svg style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} aria-hidden>
-      <defs>
-        <pattern id={STRIPE_ID} patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="8" stroke="#64748b" strokeWidth="2" strokeOpacity="0.5" />
-        </pattern>
-      </defs>
-    </svg>
-  );
+function ChoroplethLayer({ districts, onDistrictClick }: Props) {
+  const map = useMap();
+  const layerRef = useRef<L.GeoJSON | null>(null);
+
+  useEffect(() => {
+    if (layerRef.current) {
+      layerRef.current.remove();
+      layerRef.current = null;
+    }
+    if (districts.length === 0) return;
+
+    // Build lookup: normalised district name → coverage row
+    const byName = new Map<string, DistrictCoverage>();
+    for (const d of districts) {
+      byName.set(norm(d.district), d);
+    }
+
+    fetch('/india_districts.json')
+      .then(r => r.json())
+      .then(geo => {
+        const layer = L.geoJSON(geo, {
+          style: feature => {
+            const name = feature?.properties?.district ?? '';
+            const row = byName.get(norm(name));
+            if (!row) {
+              return {
+                fillColor: '#1e2433',
+                fillOpacity: 0.5,
+                color: 'rgba(255,255,255,0.06)',
+                weight: 0.5,
+              };
+            }
+            const isSparse = row.confidence < 0.45;
+            return {
+              fillColor: gapColor(row.gap_score),
+              fillOpacity: isSparse ? 0.3 : 0.75,
+              color: 'rgba(255,255,255,0.12)',
+              weight: 0.8,
+              dashArray: isSparse ? '4 3' : undefined,
+            };
+          },
+          onEachFeature: (feature, featureLayer) => {
+            const name = feature?.properties?.district ?? '';
+            const state = feature?.properties?.st_nm ?? '';
+            const row = byName.get(norm(name));
+
+            if (row) {
+              const isSparse = row.confidence < 0.45;
+              featureLayer.bindTooltip(
+                `<div style="min-width:170px">
+                  <p style="font-weight:600;margin:0 0 3px">${row.district}</p>
+                  <p style="color:#64748b;margin:0 0 5px;font-size:11px">${row.state}</p>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+                    <span style="background:${gapColor(row.gap_score)};color:white;font-size:11px;font-weight:700;padding:1px 7px;border-radius:4px">
+                      ${row.gap_score.toFixed(1)}
+                    </span>
+                    <span style="font-size:11px;color:#475569">
+                      ${row.matching_facilities}/${row.total_facilities} matching
+                    </span>
+                  </div>
+                  ${isSparse ? '<p style="color:#d97706;font-size:11px;margin:0">~ Low data confidence</p>' : ''}
+                  ${row.institutional_birth_5y_pct != null ? `<p style="color:#94a3b8;font-size:11px;margin:3px 0 0">Inst. births: ${row.institutional_birth_5y_pct}%</p>` : ''}
+                </div>`,
+                { sticky: true, opacity: 1 }
+              );
+
+              featureLayer.on({
+                click: () => onDistrictClick(row.district, row.state),
+                mouseover: e => {
+                  (e.target as L.Path).setStyle({
+                    fillOpacity: isSparse ? 0.5 : 0.95,
+                    weight: 1.5,
+                    color: 'rgba(255,255,255,0.35)',
+                  });
+                },
+                mouseout: e => layer.resetStyle(e.target as L.Path),
+              });
+            } else {
+              // Unmatched district — subtle tooltip
+              featureLayer.bindTooltip(
+                `<p style="margin:0;color:#94a3b8;font-size:11px">${name}<br><span style="color:#475569">${state}</span></p>`,
+                { sticky: true, opacity: 0.85 }
+              );
+            }
+          },
+        });
+
+        layer.addTo(map);
+        layerRef.current = layer;
+
+        // Fit bounds to matched districts only
+        const matched = districts.filter(d => byName.has(norm(d.district)));
+        if (matched.length > 0 && districts.length < 20) {
+          // Zoom to filtered state — only when few results (state filter active)
+          try { map.fitBounds(layer.getBounds(), { padding: [20, 20] }); } catch {}
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      layerRef.current?.remove();
+      layerRef.current = null;
+    };
+  }, [districts, map, onDistrictClick]);
+
+  return null;
 }
 
 function StateBoundaries() {
@@ -33,8 +132,8 @@ function StateBoundaries() {
         if (added.current) return;
         L.geoJSON(data, {
           style: () => ({
-            color: 'rgba(255,255,255,0.12)',
-            weight: 1,
+            color: 'rgba(255,255,255,0.22)',
+            weight: 1.5,
             fillColor: 'transparent',
             fillOpacity: 0,
           }),
@@ -49,66 +148,24 @@ function StateBoundaries() {
 export function CoverageMap({ districts, onDistrictClick }: Props) {
   return (
     <div className="relative h-full w-full">
-      <StripePatternDef />
       <MapContainer
-        center={[20.5937, 78.9629]}
+        center={[22, 80]}
         zoom={5}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom
         zoomControl={false}
       >
-        {/* Dark basemap */}
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
         />
-        {/* City/label layer on top */}
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
           attribution=""
           pane="shadowPane"
         />
-
         <StateBoundaries />
-
-        {districts.map((d, i) => {
-          const isSparse = d.confidence < 0.45;
-          const color = gapColor(d.gap_score);
-          const radius = Math.min(24, Math.max(6, d.total_facilities * 1.2 + 5));
-
-          return (
-            <CircleMarker
-              key={i}
-              center={[
-                // Placeholder coords until backend includes lat/lng in /api/coverage
-                20 + Math.sin(i * 1.3) * 8,
-                78 + Math.cos(i * 1.1) * 10,
-              ]}
-              radius={radius}
-              pathOptions={
-                isSparse
-                  ? {
-                      fillColor: `url(#${STRIPE_ID})`,
-                      fillOpacity: 1,
-                      color: 'rgba(100,116,139,0.4)',
-                      weight: 1,
-                      dashArray: '4 3',
-                    }
-                  : {
-                      fillColor: color,
-                      fillOpacity: d.gap_score <= 1 ? 0.9 : 0.7,
-                      color: 'rgba(0,0,0,0.3)',
-                      weight: 1,
-                    }
-              }
-              eventHandlers={{ click: () => onDistrictClick(d.district, d.state) }}
-            >
-              <Tooltip direction="top" offset={[0, -radius]}>
-                <DistrictTooltip d={d} isSparse={isSparse} />
-              </Tooltip>
-            </CircleMarker>
-          );
-        })}
+        <ChoroplethLayer districts={districts} onDistrictClick={onDistrictClick} />
       </MapContainer>
 
       <MapLegend />
@@ -116,36 +173,10 @@ export function CoverageMap({ districts, onDistrictClick }: Props) {
   );
 }
 
-function DistrictTooltip({ d, isSparse }: { d: DistrictCoverage; isSparse: boolean }) {
-  return (
-    <div className="space-y-1 min-w-[190px]">
-      <p className="font-semibold text-slate-800 text-sm">{d.district}</p>
-      <p className="text-xs text-slate-500">{d.state}</p>
-      <div className="flex items-center gap-2 pt-0.5">
-        <span
-          className="text-xs font-bold px-1.5 py-0.5 rounded"
-          style={{ background: gapColor(d.gap_score), color: 'white' }}
-        >
-          {d.gap_score.toFixed(1)}
-        </span>
-        <span className="text-xs text-slate-500">
-          {d.matching_facilities}/{d.total_facilities} matching
-        </span>
-      </div>
-      {isSparse && (
-        <p className="text-xs text-amber-600">~ Low data confidence</p>
-      )}
-      {d.institutional_birth_5y_pct != null && (
-        <p className="text-xs text-slate-400">Inst. births: {d.institutional_birth_5y_pct}%</p>
-      )}
-    </div>
-  );
-}
-
 function MapLegend() {
   return (
     <div className="absolute bottom-5 right-4 z-[9999] bg-[#1a1d23]/90 backdrop-blur rounded-lg px-3 py-2.5 text-xs border border-white/10">
-      <p className="font-semibold mb-2 text-white/60 uppercase tracking-widest text-[10px]">Gap Score</p>
+      <p className="font-semibold mb-2 text-white/50 uppercase tracking-widest text-[10px]">Gap Score</p>
       <div className="space-y-1.5">
         {[
           { color: '#dc2626', label: '0–1  Desert' },
@@ -154,16 +185,17 @@ function MapLegend() {
           { color: '#16a34a', label: '7–10 Served' },
         ].map(({ color, label }) => (
           <div key={label} className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
             <span className="text-white/50">{label}</span>
           </div>
         ))}
         <div className="flex items-center gap-2 pt-1 mt-0.5 border-t border-white/10">
-          <span
-            className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-slate-400"
-            style={{ background: 'repeating-linear-gradient(45deg,#64748b 0,#64748b 1.5px,transparent 1.5px,transparent 5px)' }}
-          />
-          <span className="text-white/30">Striped = sparse data</span>
+          <span className="w-3 h-3 rounded-sm flex-shrink-0 border border-dashed border-slate-500" />
+          <span className="text-white/30">Dashed = sparse data</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: '#1e2433' }} />
+          <span className="text-white/25">No data</span>
         </div>
       </div>
     </div>
