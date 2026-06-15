@@ -123,7 +123,7 @@ export function DistrictPage() {
       )}
 
       {/* Body */}
-      <div className="flex-1 min-h-0 grid grid-cols-[1fr_320px] divide-x divide-white/8">
+      <div className="flex-1 min-h-0 grid grid-cols-[55fr_45fr] divide-x divide-white/8">
         {/* Facilities */}
         <div className="overflow-y-auto">
           <div className="p-5 space-y-2">
