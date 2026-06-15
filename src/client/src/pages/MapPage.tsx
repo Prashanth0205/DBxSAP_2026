@@ -86,14 +86,14 @@ export function MapPage() {
               value={state}
               onChange={e => setState(e.target.value)}
             >
-              <option value="">Select a state…</option>
+              <option value="">All states</option>
               {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
           <button
             onClick={analyze}
-            disabled={loading || !state}
+            disabled={loading}
             className="w-full py-2 bg-[#e07340] hover:bg-[#c8612e] text-white rounded text-xs font-semibold tracking-wide transition-colors disabled:opacity-40"
           >
             {loading ? 'Analyzing…' : 'Analyze Coverage'}

@@ -1,0 +1,68 @@
+nfhs_state_raw,nfhs_district_raw,canonical_state_norm,canonical_district_norm,score,source,notes
+Andhra Pradesh,Sri Potti Sriramulu Nello ,ANDHRA PRADESH,SPSR NELLORE,,manual:abbreviation,Pincode dir abbreviates to SPSR NELLORE
+Assam,Kamrup Metropolitan ,ASSAM,KAMRUP METRO,,manual:abbreviation,Pincode dir uses METRO not METROPOLITAN
+Assam,Morigaon ,ASSAM,MARIGAON,,manual:spelling-variant,
+Chhattisgarh,Kabeerdham ,CHHATTISGARH,KABIRDHAM,,manual:spelling-variant,
+Chhattisgarh,Koriya ,CHHATTISGARH,KOREA,,manual:spelling-variant,Pincode dir spells as KOREA
+Chhattisgarh,Uttar Bastar Kanker ,CHHATTISGARH,KANKER,,manual:legacy-name,Uttar Bastar Kanker is the older formal name; pincode dir uses KANKER
+Gujarat,Aravali ,GUJARAT,ARVALLI,,manual:spelling-variant,
+Gujarat,Chhota Udaipur ,GUJARAT,CHHOTAUDEPUR,,manual:spelling-variant,
+Gujarat,The Dangs ,GUJARAT,DANG,,manual:singular-form,Pincode dir uses singular DANG
+Haryana,Gurgaon ,HARYANA,GURUGRAM,,manual:govt-rename,Renamed by Haryana govt in 2016
+Haryana,Mewat ,HARYANA,NUH,,manual:govt-rename,Renamed by Haryana govt in 2017
+Jammu & Kashmir,Badgam ,JAMMU AND KASHMIR,BUDGAM,,manual:spelling-variant,
+Jammu & Kashmir,Bandipore ,JAMMU AND KASHMIR,BANDIPORA,,manual:spelling-variant,
+Jammu & Kashmir,Punch ,JAMMU AND KASHMIR,POONCH,,manual:spelling-variant,
+Jammu & Kashmir,Shupiyan ,JAMMU AND KASHMIR,SHOPIAN,,manual:spelling-variant,
+Jharkhand,Kodarma ,JHARKHAND,KODERMA,,manual:spelling-variant,
+Jharkhand,Pashchimi Singhbhum ,JHARKHAND,WEST SINGHBHUM,,manual:translation,Pashchimi=West (Hindi)
+Jharkhand,Purbi Singhbhum ,JHARKHAND,EAST SINGHBUM,,manual:translation,Purbi=East (Hindi); pincode dir has typo SINGHBUM (no H)
+Jharkhand,Sahibganj ,JHARKHAND,SAHEBGANJ,,manual:spelling-variant,
+Karnataka,Bangalore ,KARNATAKA,BENGALURU URBAN,,manual:govt-rename,Renamed by Karnataka govt 2014; Bangalore (no suffix) maps to URBAN per convention
+Karnataka,Bangalore Rural ,KARNATAKA,BENGALURU RURAL,,manual:govt-rename,
+Karnataka,Belgaum ,KARNATAKA,BELAGAVI,,manual:govt-rename,Renamed by Karnataka govt 2014
+Karnataka,Bellary ,KARNATAKA,BALLARI,,manual:govt-rename,Renamed by Karnataka govt 2014
+Karnataka,Bijapur ,KARNATAKA,VIJAYAPURA,,manual:govt-rename,Renamed by Karnataka govt 2014
+Karnataka,Chikmagalur ,KARNATAKA,CHIKKAMAGALURU,,manual:govt-rename,Renamed by Karnataka govt 2014
+Karnataka,Gulbarga ,KARNATAKA,KALABURAGI,,manual:govt-rename,Renamed by Karnataka govt 2014
+Karnataka,Mysore ,KARNATAKA,MYSURU,,manual:govt-rename,Renamed by Karnataka govt 2014
+Karnataka,Shimoga ,KARNATAKA,SHIVAMOGGA,,manual:govt-rename,Renamed by Karnataka govt 2014
+Karnataka,Tumkur ,KARNATAKA,TUMAKURU,,manual:govt-rename,Renamed by Karnataka govt 2014
+Ladakh,Leh(Ladakh) ,LADAKH,LEH LADAKH,,manual:punctuation-strip,
+ Lakshadweep ,Lakshadweep ,LAKSHADWEEP,LAKSHADWEEP DISTRICT,,manual:appended-suffix,Pincode dir adds DISTRICT suffix to the only district in the UT
+Madhya Pradesh,Khandwa (East Nimar) ,MADHYA PRADESH,EAST NIMAR,,manual:legacy-name,Khandwa is current; East Nimar is legacy. Pincode dir uses legacy.
+Madhya Pradesh,Khargone (West Nimar) ,MADHYA PRADESH,KHARGONE,,manual:drop-legacy-paren,Pincode dir uses current name KHARGONE
+Madhya Pradesh,Narsimhapur ,MADHYA PRADESH,NARSINGHPUR,,manual:spelling-variant,
+Maharastra,Bid ,MAHARASHTRA,BEED,,manual:spelling-variant,
+Maharastra,Raigarh ,MAHARASHTRA,RAIGAD,,manual:spelling-variant,
+Mizoram,Chandel ,MANIPUR,CHANDEL,,manual:nfhs-data-quality,Chandel is a Manipur district; NFHS misclassified it under Mizoram
+Odisha,Baudh ,ODISHA,BOUDH,,manual:spelling-variant,
+Odisha,Debagarh ,ODISHA,DEOGARH,,manual:spelling-variant,Difflib tied DEOGARH and BARGARH at 0.8; DEOGARH is correct
+Odisha,Subarnapur ,ODISHA,SONEPUR,,manual:alternate-name,Subarnapur and Sonepur are alternate names for the same district
+Puducherry,Puducherry ,PUDUCHERRY,PONDICHERRY,,manual:govt-rename,Renamed 2006; pincode dir still uses PONDICHERRY
+Punjab,Muktsar ,PUNJAB,SRI MUKTSAR SAHIB,,manual:full-formal-name,Pincode dir uses full formal name
+Punjab,Sahibzada Ajit Singh Nagar ,PUNJAB,S.A.S NAGAR,,manual:abbreviation,Pincode dir abbreviates to S.A.S NAGAR
+Rajasthan,Chittaurgarh ,RAJASTHAN,CHITTORGARH,,manual:spelling-variant,
+Rajasthan,Dhaulpur ,RAJASTHAN,DHOLPUR,,manual:spelling-variant,
+Tamil Nadu,Kancheepuram ,TAMIL NADU,KANCHIPURAM,,manual:spelling-variant,
+Tamil Nadu,Thoothukkudi ,TAMIL NADU,TUTICORIN,,manual:legacy-name,Pincode dir uses legacy English name TUTICORIN
+Telangana,Warangal Rural ,TELANGANA,WARANGAL,,manual:lossy-merge,Pincode dir has not adopted the 2016 Warangal split; both Rural and Urban map to WARANGAL (lossy on facility-side)
+Telangana,Warangal Urban ,TELANGANA,WARANGAL,,manual:lossy-merge,Pincode dir has not adopted the 2016 Warangal split; both Rural and Urban map to WARANGAL (lossy on facility-side)
+Uttar Pradesh,Allahabad ,UTTAR PRADESH,PRAYAGRAJ,,manual:govt-rename,Renamed by UP govt 2018
+Uttar Pradesh,Faizabad ,UTTAR PRADESH,AYODHYA,,manual:govt-rename,Renamed by UP govt 2018
+Uttar Pradesh,Jyotiba Phule Nagar ,UTTAR PRADESH,AMROHA,,manual:govt-rename,Renamed by UP govt 2012
+Uttar Pradesh,Kanshiram Nagar ,UTTAR PRADESH,KASGANJ,,manual:govt-rename,Renamed by UP govt 2012
+Uttar Pradesh,Mahamaya Nagar ,UTTAR PRADESH,HATHRAS,,manual:govt-rename,Reverted to HATHRAS by UP govt 2012
+Uttar Pradesh,Sant Ravidas Nagar (Bhadohi) ,UTTAR PRADESH,BHADOHI,,manual:drop-legacy-paren,Pincode dir uses current short form BHADOHI
+Uttar Pradesh,Shrawasti ,UTTAR PRADESH,SHRAVASTI,,manual:spelling-variant,
+Uttarakhand,Garhwal ,UTTARAKHAND,PAURI GARHWAL,,manual:disambiguation,Pincode dir disambiguates with PAURI prefix (the alternative is TEHRI GARHWAL)
+West Bengal,Dakshin Dinajpur ,WEST BENGAL,DINAJPUR DAKSHIN,,manual:word-reorder,Same district name with reversed Hindi word order
+West Bengal,Darjiling ,WEST BENGAL,DARJEELING,,manual:spelling-variant,
+West Bengal,Haora ,WEST BENGAL,HOWRAH,,manual:spelling-variant,
+West Bengal,Hugli ,WEST BENGAL,HOOGHLY,,manual:spelling-variant,
+West Bengal,Koch Bihar ,WEST BENGAL,COOCHBEHAR,,manual:spelling-variant,
+West Bengal,North Twenty Four Pargana ,WEST BENGAL,24 PARAGANAS NORTH,,manual:numeral-reorder,
+West Bengal,Paschim Medinipur ,WEST BENGAL,MEDINIPUR WEST,,manual:translation,Paschim=West (Hindi)
+West Bengal,Purba Medinipur ,WEST BENGAL,MEDINIPUR EAST,,manual:translation,Purba=East (Hindi)
+West Bengal,South Twenty Four Pargana ,WEST BENGAL,24 PARAGANAS SOUTH,,manual:numeral-reorder,
+West Bengal,Uttar Dinajpur ,WEST BENGAL,DINAJPUR UTTAR,,manual:word-reorder,
