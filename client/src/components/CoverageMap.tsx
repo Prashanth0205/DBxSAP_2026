@@ -8,6 +8,20 @@ interface Props {
   onDistrictClick: (district: string, state: string) => void;
 }
 
+// Module-level cache so the GeoJSON is only fetched once per page load
+let _districtGeoCache: Promise<GeoJSON.GeoJsonObject> | null = null;
+let _stateGeoCache: Promise<GeoJSON.GeoJsonObject> | null = null;
+
+function fetchDistricts() {
+  if (!_districtGeoCache) _districtGeoCache = fetch('/india_districts.json').then(r => r.json());
+  return _districtGeoCache;
+}
+
+function fetchStates() {
+  if (!_stateGeoCache) _stateGeoCache = fetch('/india_states.geojson').then(r => r.json());
+  return _stateGeoCache;
+}
+
 // Normalise district names for fuzzy matching
 function norm(s: string) {
   return s.toLowerCase().replace(/[^a-z]/g, '');
@@ -85,8 +99,7 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
       byName.set(norm(d.district), d);
     }
 
-    fetch('/india_districts.json')
-      .then(r => r.json())
+    fetchDistricts()
       .then(geo => {
         const layer = L.geoJSON(geo, {
           style: feature => {
@@ -181,8 +194,7 @@ function StateBoundaries() {
   const added = useRef(false);
   useEffect(() => {
     if (added.current) return;
-    fetch('/india_states.geojson')
-      .then(r => r.json())
+    fetchStates()
       .then(data => {
         if (added.current) return;
         L.geoJSON(data, {
