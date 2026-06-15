@@ -198,7 +198,7 @@ function FacilityCard({ facility: f, capability }: { facility: Facility; capabil
           onClick={() => setExpanded(x => !x)}
           className="mt-2 text-[11px] text-white/30 hover:text-white/55 transition-colors"
         >
-          {expanded ? '↑ less' : '↓ more'}
+          {expanded ? '↑ Hide evidence' : '↓ Show evidence'}
         </button>
       )}
 
