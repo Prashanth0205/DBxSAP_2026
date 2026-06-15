@@ -38,3 +38,6 @@ venv/
 
 # databricks
 .databricks/
+
+# auto-generated AppKit types (endpoint-specific, varies per developer)
+src/shared/appkit-types/serving.d.ts
