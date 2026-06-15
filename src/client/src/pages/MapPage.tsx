@@ -86,14 +86,14 @@ export function MapPage() {
               value={state}
               onChange={e => setState(e.target.value)}
             >
-              <option value="">Select a state…</option>
+              <option value="">All states</option>
               {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
           <button
             onClick={analyze}
-            disabled={loading || !state}
+            disabled={loading}
             className="w-full py-2 bg-[#e07340] hover:bg-[#c8612e] text-white rounded text-xs font-semibold tracking-wide transition-colors disabled:opacity-40"
           >
             {loading ? 'Analyzing…' : 'Analyze Coverage'}
@@ -142,6 +142,12 @@ export function MapPage() {
                       {d.confidence < 0.45 && (
                         <span className="text-amber-500/70 text-[10px]">~</span>
                       )}
+                      <span
+                        className="text-[10px] font-semibold tabular-nums"
+                        style={{ color: gapColor(d.gap_score) }}
+                      >
+                        {d.gap_score.toFixed(1)}
+                      </span>
                       <GapBar score={d.gap_score} />
                     </div>
                   </div>
@@ -178,12 +184,14 @@ function StatCell({ label, value, accent }: { label: string; value: number; acce
 }
 
 function GapBar({ score }: { score: number }) {
-  const w = Math.max(3, Math.round((score / 10) * 28));
+  // Min 12% width so a gap_score of 0 still reads as "data present, scored zero"
+  // rather than visually empty (Bihar maternity etc. have lots of true zeros).
+  const widthPct = Math.max(12, (score / 10) * 100);
   return (
     <div className="w-7 h-1.5 bg-white/10 rounded-full overflow-hidden">
       <div
         className="h-full rounded-full"
-        style={{ width: `${(score / 10) * 100}%`, background: gapColor(score) }}
+        style={{ width: `${widthPct}%`, background: gapColor(score) }}
       />
     </div>
   );

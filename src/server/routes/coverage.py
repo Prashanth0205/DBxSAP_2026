@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query
 from typing import Optional
 
 from server.warehouse import (
@@ -23,13 +23,15 @@ def get_coverage(
     NFHS-5 outcome indicators, joined via the pincode directory with NFHS
     state/district alias resolution.
 
-    Returns rows sorted by gap_score asc (worst first), confidence desc.
+    If `state` is omitted, returns all districts nationally (capped to keep
+    the payload small). Returns rows sorted by gap_score asc (worst first),
+    confidence desc.
     """
-    if not state:
-        raise HTTPException(status_code=400, detail="state query parameter is required")
-
-    state_canon = normalize_state(state)
+    state_canon = normalize_state(state) if state else None
     cap_pattern = f"%{capability.lower()}%"
+
+    state_filter = "WHERE fd.state_canon = :p2" if state_canon else ""
+    limit_clause = "" if state_canon else "LIMIT 500"
 
     sql = f"""
 WITH {alias_ctes()},
@@ -69,7 +71,7 @@ agg AS (
       ) / 6.0
     ), 2) AS confidence
   FROM fac_district fd
-  WHERE fd.state_canon = :p2
+  {state_filter}
   GROUP BY fd.state_canon, fd.district_canon
 )
 SELECT
@@ -93,7 +95,9 @@ LEFT JOIN nfhs_canon n
   ON a.state_canon    = n.state_canon
  AND a.district_canon = n.district_canon
 ORDER BY gap_score ASC, confidence DESC
+{limit_clause}
 """.strip()
 
-    rows = wh_query(sql, [cap_pattern, state_canon])
+    params = [cap_pattern, state_canon] if state_canon else [cap_pattern]
+    rows = wh_query(sql, params)
     return rows

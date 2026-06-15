@@ -43,8 +43,11 @@ TBL_NFHS5 = f"{SOURCE_CATALOG}.{SOURCE_SCHEMA}.nfhs_5_district_health_indicators
 # queries can left-join them onto a normalized NFHS CTE.
 # ─────────────────────────────────────────────
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_EDA_DIR = _REPO_ROOT / "eda"
+# Alias CSVs are co-located with the server module so they ship inside the
+# Databricks Apps bundle (which only includes /src). The /eda copies under the
+# repo root remain the source-of-truth for offline analysis; they are mirrored
+# here on commit.
+_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
 def _sql_str(s: str) -> str:
@@ -53,7 +56,7 @@ def _sql_str(s: str) -> str:
 
 def _load_state_aliases() -> list[tuple[str, str]]:
     """Returns (nfhs_state_norm_uppercase, canonical_state_norm) tuples."""
-    p = _EDA_DIR / "state_aliases.csv"
+    p = _DATA_DIR / "state_aliases.csv"
     if not p.exists():
         return []
     out = []
@@ -83,7 +86,7 @@ def _load_district_aliases() -> list[tuple[str, str, str, str]]:
     """Returns (nfhs_state_norm, nfhs_district_norm, canonical_state_norm, canonical_district_norm)."""
     out: list[tuple[str, str, str, str]] = []
     for fname in ("district_aliases_auto.csv", "district_aliases_manual.csv"):
-        p = _EDA_DIR / fname
+        p = _DATA_DIR / fname
         if not p.exists():
             continue
         with p.open() as f:

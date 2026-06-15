@@ -171,11 +171,21 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
         injectStripePatterns(map);
         layerRef.current = layer;
 
-        // Fit bounds to matched districts only
+        // Fit bounds to matched districts whenever a state filter is plausibly
+        // active. Anything <100 districts is a single-state slice — zoom in so
+        // the choropleth fills are actually visible. Nation-wide views (~500
+        // rows) keep the default India view.
         const matched = districts.filter(d => byName.has(norm(d.district)));
-        if (matched.length > 0 && districts.length < 20) {
-          // Zoom to filtered state — only when few results (state filter active)
-          try { map.fitBounds(layer.getBounds(), { padding: [20, 20] }); } catch {}
+        if (matched.length > 0 && districts.length < 100) {
+          try {
+            const fl = L.geoJSON({
+              type: 'FeatureCollection',
+              features: (geo as GeoJSON.FeatureCollection).features.filter(f =>
+                byName.has(norm((f.properties as { district?: string })?.district ?? ''))
+              ),
+            } as GeoJSON.FeatureCollection);
+            map.fitBounds(fl.getBounds(), { padding: [20, 20] });
+          } catch {}
         }
       })
       .catch(() => {});
