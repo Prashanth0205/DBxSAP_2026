@@ -51,24 +51,34 @@ facilities.address_zipOrPostcode
         ▼  (PIN match — 95.5% resolve)
 india_post_pincode_directory.pincode → district, statename
         │
-        ▼  (normalized district + state — 76.8% match, alias table needed)
+        ▼  (normalized district + state + alias layers — 706/706 = 100%)
 nfhs_5_district_health_indicators → outcomes
 ```
 
-See [`eda/exploration.md`](eda/exploration.md) for the first pass of dataset findings, including coverage tables, the literal-`"null"`-string trap, and known join-quality risks.
+The NFHS↔pincode-directory join was the single biggest engineering risk for Track 2. It is now resolved end-to-end via three layers under `/eda`: a SQL normalization CTE, a 3-row state alias file, and a 141-row district alias set (75 auto-accepted via difflib + 66 hand-curated for government renames, abbreviations, and word reorderings). See [`eda/exploration.md`](eda/exploration.md) for the full pass-1 findings — coverage tables, the literal-`"null"`-string trap, and the alias resolution audit trail.
 
 ## Repo layout
 
 ```
 .
 ├── README.md                  ← you are here
-├── eda/                       ← exploration writeups + small derived aggregates
+├── databricks.yml             ← Databricks Asset Bundle (app + Lakebase resource)
+├── eda/                       ← exploration writeups + alias resolution artifacts
 │   ├── exploration.md
-│   └── facilities_by_state.csv
-└── (app code lands here once we scaffold)
+│   ├── facilities_by_state.csv
+│   ├── state_aliases.csv          (NFHS → pincode-dir, 3 rows)
+│   ├── district_aliases_auto.csv  (fuzzy ≥ 0.90, 75 rows)
+│   ├── district_aliases_manual.csv (hand-curated, 66 rows)
+│   ├── sql/district_normalize.sql (reusable join CTE)
+│   └── notes/                     (review notes, audit trail)
+└── src/                       ← AppKit scaffold (React + Express + Lakebase)
+    ├── client/                    Vite + React 19 frontend
+    ├── server/                    Express API
+    ├── app.yaml                   Databricks App config
+    └── appkit.plugins.json        AppKit plugin manifest
 ```
 
-We consume the dataset via Delta Sharing at runtime — full tables are not exported to CSV. Only summaries and small derived aggregates live in the repo.
+We consume the three Delta-Sharing tables at runtime — full tables are not exported to CSV. Only summaries and small derived aggregates live in the repo.
 
 ## Workflow
 
@@ -85,4 +95,4 @@ We consume the dataset via Delta Sharing at runtime — full tables are not expo
 
 ## Status
 
-Pre-scaffold. Repo currently contains the challenge brief and first-pass EDA. App scaffolding (Databricks App + Lakebase for user-saved scenarios) lands next.
+EDA pass 1 complete. NFHS↔pincode-directory district resolution at 100% (706/706) via the alias layers under `/eda`. AppKit scaffold (React + Express + Lakebase) landed under `/src` and bundles via `databricks.yml`. Track 2 application logic — facility trust-weighting, the [low/high coverage] × [low/high outcome] desert classifier, and saved-scenario persistence — has not been built yet on top of the scaffold.
