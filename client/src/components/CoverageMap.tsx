@@ -13,6 +13,61 @@ function norm(s: string) {
   return s.toLowerCase().replace(/[^a-z]/g, '');
 }
 
+// Inject diagonal stripe patterns into Leaflet's SVG overlay defs.
+// Must be called after the map SVG exists (inside a useEffect post-mount).
+function injectStripePatterns(map: L.Map) {
+  const svg = map.getPanes().overlayPane?.querySelector('svg');
+  if (!svg) return;
+
+  let defs = svg.querySelector('defs');
+  if (!defs) {
+    defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svg.insertBefore(defs, svg.firstChild);
+  }
+
+  const PATTERNS = [
+    { id: 'stripe-desert',  color: '#dc2626' },
+    { id: 'stripe-severe',  color: '#f97316' },
+    { id: 'stripe-partial', color: '#eab308' },
+    { id: 'stripe-served',  color: '#16a34a' },
+  ];
+
+  for (const { id, color } of PATTERNS) {
+    if (defs.querySelector(`#${id}`)) continue;
+
+    const pat = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+    pat.setAttribute('id', id);
+    pat.setAttribute('patternUnits', 'userSpaceOnUse');
+    pat.setAttribute('width', '8');
+    pat.setAttribute('height', '8');
+    pat.setAttribute('patternTransform', 'rotate(45)');
+
+    // Faded background
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('width', '8'); bg.setAttribute('height', '8');
+    bg.setAttribute('fill', color); bg.setAttribute('fill-opacity', '0.18');
+
+    // Diagonal stripe
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', '0'); line.setAttribute('y1', '0');
+    line.setAttribute('x2', '0'); line.setAttribute('y2', '8');
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke-opacity', '0.75');
+
+    pat.appendChild(bg);
+    pat.appendChild(line);
+    defs.appendChild(pat);
+  }
+}
+
+function gapStripeUrl(score: number): string {
+  if (score <= 1) return 'url(#stripe-desert)';
+  if (score <= 3) return 'url(#stripe-severe)';
+  if (score <= 6) return 'url(#stripe-partial)';
+  return 'url(#stripe-served)';
+}
+
 function ChoroplethLayer({ districts, onDistrictClick }: Props) {
   const map = useMap();
   const layerRef = useRef<L.GeoJSON | null>(null);
@@ -47,11 +102,10 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
             }
             const isSparse = row.confidence < 0.45;
             return {
-              fillColor: gapColor(row.gap_score),
-              fillOpacity: isSparse ? 0.3 : 0.75,
+              fillColor: isSparse ? gapStripeUrl(row.gap_score) : gapColor(row.gap_score),
+              fillOpacity: isSparse ? 1 : 0.75,
               color: 'rgba(255,255,255,0.12)',
               weight: 0.8,
-              dashArray: isSparse ? '4 3' : undefined,
             };
           },
           onEachFeature: (feature, featureLayer) => {
@@ -83,9 +137,9 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
                 click: () => onDistrictClick(row.district, row.state),
                 mouseover: e => {
                   (e.target as L.Path).setStyle({
-                    fillOpacity: isSparse ? 0.5 : 0.95,
-                    weight: 1.5,
-                    color: 'rgba(255,255,255,0.35)',
+                    fillOpacity: isSparse ? 1 : 0.95,
+                    weight: 2,
+                    color: 'rgba(255,255,255,0.5)',
                   });
                 },
                 mouseout: e => layer.resetStyle(e.target as L.Path),
@@ -101,6 +155,7 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
         });
 
         layer.addTo(map);
+        injectStripePatterns(map);
         layerRef.current = layer;
 
         // Fit bounds to matched districts only
@@ -189,11 +244,23 @@ function MapLegend() {
             <span className="text-white/50">{label}</span>
           </div>
         ))}
-        <div className="flex items-center gap-2 pt-1 mt-0.5 border-t border-white/10">
-          <span className="w-3 h-3 rounded-sm flex-shrink-0 border border-dashed border-slate-500" />
-          <span className="text-white/30">Dashed = sparse data</span>
+
+        <div className="pt-1.5 mt-1 border-t border-white/10 space-y-1.5">
+          <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold">Data Quality</p>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{
+              background: 'repeating-linear-gradient(45deg, rgba(220,38,38,0.18) 0px, rgba(220,38,38,0.18) 2px, transparent 2px, transparent 5px), rgba(220,38,38,0.18)',
+              outline: '1px solid rgba(220,38,38,0.5)',
+            }} />
+            <span className="text-white/40">Striped = sparse, uncertain</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: '#dc2626', opacity: 0.75 }} />
+            <span className="text-white/40">Solid = confirmed</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-2 pt-1 border-t border-white/10">
           <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: '#1e2433' }} />
           <span className="text-white/25">No data</span>
         </div>
