@@ -1,8 +1,9 @@
 import os
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
@@ -53,11 +54,28 @@ def health():
     return {"status": "ok"}
 
 
-# Serve React build in production
+# Serve React build in production. Mount /assets and known root-level static files
+# directly, then fall back to index.html so React Router handles client-side routes
+# like /map, /district/<id>, /workspace.
 _dist = os.path.join(os.path.dirname(__file__), "..", "client", "dist")
 if os.path.exists(_dist):
-    app.mount("/", StaticFiles(directory=_dist, html=True), name="static")
-    LOGGER.info(f"startup | serving static files from {_dist}")
+    _assets = os.path.join(_dist, "assets")
+    if os.path.isdir(_assets):
+        app.mount("/assets", StaticFiles(directory=_assets), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        # API 404s should look like API 404s, not the SPA shell.
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        # If a real file exists under client/dist/ (favicon, geojson, etc), serve it.
+        candidate = os.path.normpath(os.path.join(_dist, full_path))
+        if candidate.startswith(_dist) and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        # Otherwise hand React Router the SPA shell.
+        return FileResponse(os.path.join(_dist, "index.html"))
+
+    LOGGER.info(f"startup | serving SPA from {_dist}")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { CoverageMap } from '../components/CoverageMap';
-import { CAPABILITY_TAGS, DistrictCoverage, CapabilityTag, gapColor, confidenceLabel } from '../lib/types';
+import { CAPABILITY_TAGS, DistrictCoverage, CapabilityTag, gapColor } from '../lib/types';
+
+const CAPABILITY_ICONS: Record<string, string> = {
+  maternity:  '🤰',
+  dialysis:   '🫘',
+  icu:        '🫀',
+  emergency:  '🚨',
+  oncology:   '🎗️',
+  trauma:     '🦴',
+  nicu:       '👶',
+};
 
 const INDIA_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -64,12 +74,13 @@ export function MapPage() {
                 <button
                   key={t.value}
                   onClick={() => setCapability(t.value)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-all flex items-center gap-1.5 ${
                     capability === t.value
                       ? 'bg-[#e07340] text-white'
                       : 'bg-white/6 text-white/50 hover:bg-white/10 hover:text-white/80'
                   }`}
                 >
+                  <span>{CAPABILITY_ICONS[t.value]}</span>
                   {t.label}
                 </button>
               ))}

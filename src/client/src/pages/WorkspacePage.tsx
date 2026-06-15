@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Scenario, CreateScenarioRequest, CAPABILITY_TAGS, gapColor, confidenceBadgeClass } from '../lib/types';
+import { Scenario, ScenarioDiffCity, CreateScenarioRequest, CAPABILITY_TAGS, gapColor, confidenceBadgeClass } from '../lib/types';
+import { ScenarioDiffMap } from '../components/ScenarioDiffMap';
 
 export function WorkspacePage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -10,6 +11,13 @@ export function WorkspacePage() {
   const [form, setForm] = useState<Partial<CreateScenarioRequest>>({
     name: '', capability: 'maternity', district: '', state: '', note: '',
   });
+
+  // Scenario diff state
+  const [diffA, setDiffA] = useState<number | ''>('');
+  const [diffB, setDiffB] = useState<number | ''>('');
+  const [diffCities, setDiffCities] = useState<ScenarioDiffCity[]>([]);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [hasCompared, setHasCompared] = useState(false);
 
   useEffect(() => {
     fetch('/api/scenarios')
@@ -38,9 +46,30 @@ export function WorkspacePage() {
     }
   }
 
+  async function compareScenarios() {
+    if (!diffA || !diffB) return;
+    setDiffLoading(true);
+    try {
+      const data: ScenarioDiffCity[] = await fetch(
+        `/api/scenarios/diff?a=${diffA}&b=${diffB}`
+      ).then(r => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); });
+      setDiffCities(data);
+      setHasCompared(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to compare');
+    } finally {
+      setDiffLoading(false);
+    }
+  }
+
+  const scenarioA = scenarios.find(s => s.id === diffA);
+  const scenarioB = scenarios.find(s => s.id === diffB);
+
   return (
     <div className="h-full bg-[#0e1117] overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
+
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-white font-semibold text-lg">Planning Workspace</h2>
@@ -56,6 +85,7 @@ export function WorkspacePage() {
 
         {error && <p className="text-xs text-red-400">{error}</p>}
 
+        {/* New scenario form */}
         {showForm && (
           <div className="bg-white/4 border border-white/10 rounded-xl p-5 space-y-4">
             <p className="text-xs font-semibold text-white/50 uppercase tracking-widest">New Scenario</p>
@@ -101,6 +131,7 @@ export function WorkspacePage() {
           </div>
         )}
 
+        {/* Scenario list */}
         {loading ? (
           <div className="flex justify-center py-16">
             <svg className="animate-spin h-5 w-5 text-white/20" fill="none" viewBox="0 0 24 24">
@@ -115,6 +146,65 @@ export function WorkspacePage() {
         ) : (
           <div className="space-y-2">
             {scenarios.map(s => <ScenarioRow key={s.id} scenario={s} />)}
+          </div>
+        )}
+
+        {/* Scenario comparison */}
+        {scenarios.length >= 2 && (
+          <div className="space-y-4 pt-2 border-t border-white/8">
+            <div>
+              <p className="text-xs font-semibold text-white/50 uppercase tracking-widest">Compare Scenarios</p>
+              <p className="text-xs text-white/25 mt-1">See which districts appear in both plans vs each alone.</p>
+            </div>
+
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="flex-1 min-w-[140px]">
+                <FieldLabel>Scenario A</FieldLabel>
+                <select
+                  className={input}
+                  value={diffA}
+                  onChange={e => setDiffA(e.target.value ? Number(e.target.value) : '')}
+                >
+                  <option value="">Select…</option>
+                  {scenarios.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1 min-w-[140px]">
+                <FieldLabel>Scenario B</FieldLabel>
+                <select
+                  className={input}
+                  value={diffB}
+                  onChange={e => setDiffB(e.target.value ? Number(e.target.value) : '')}
+                >
+                  <option value="">Select…</option>
+                  {scenarios.filter(s => s.id !== diffA).map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={compareScenarios}
+                disabled={!diffA || !diffB || diffA === diffB || diffLoading}
+                className="px-4 py-1.5 bg-[#7c3aed] hover:bg-[#6d28d9] text-white rounded text-xs font-semibold disabled:opacity-40 transition-colors flex items-center gap-2"
+              >
+                {diffLoading && (
+                  <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                )}
+                Compare
+              </button>
+            </div>
+
+            <ScenarioDiffMap
+              cities={diffCities}
+              labelA={scenarioA?.name ?? 'Scenario A'}
+              labelB={scenarioB?.name ?? 'Scenario B'}
+              hasQueried={hasCompared}
+            />
           </div>
         )}
       </div>
