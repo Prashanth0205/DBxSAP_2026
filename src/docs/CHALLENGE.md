@@ -98,6 +98,8 @@ The hackathon is open only to Data + AI Summit 2026 attendees. **Every teammate 
 
 This is our running self-assessment. Items marked ⚠️ are still risks at the time of capture; they should be verified end-to-end on the deployed app before judging.
 
+> **\* Code-level verified.** The implementation wires the requirement end-to-end (frontend renders the field, backend / agent prompt emits it). What this stops short of: a live demo confirming the LLM populates the `sources[]` array on every run under load. One smoke pass on the deployed URL closes that gap.
+
 ### Core requirements
 
 | Requirement | Status | Where it lives |
@@ -105,7 +107,7 @@ This is our running self-assessment. Items marked ⚠️ are still risks at the 
 | Runs on Free Edition as a Databricks App | ✅ | `databricks.yml`, [DEPLOY.md](../../DEPLOY.md), live URL |
 | Uses the provided dataset | ✅ | Delta Sharing catalog `databricks_virtue_foundation_dataset_dais_2026` (3 tables) |
 | Clear non-technical workflow | ✅ | `MapPage`, `DistrictPage`, `WorkspacePage` |
-| Cites underlying facility text for claims | ⚠️ unverified end-to-end | Backend: `routes/verify.py`, `routes/assessment.py`. Need to confirm citations render in the UI alongside the LLM summary, not just live in the API response. |
+| Cites underlying facility text for claims | ✅ * | Two render points in `DistrictPage.tsx`: (1) `AssessmentPanel` lists `assessment.sources[]` as `[database\|web] {ref}` under the LLM verdict + summary; (2) `FacilityCard` expanded view renders `f.sources[]` as clickable URLs. Agent prompts emit the matching schemas (`agent.py` L172, L421). |
 | Communicates uncertainty | ✅ | Dual-encoded uncertainty map: choropleth color = coverage gap, stripe overlay = data sparsity. `CoverageMap.tsx`. |
 | Persists user actions | ✅ | Lakebase Postgres, `routes/scenarios.py`, `WorkspacePage.tsx` |
 
@@ -115,7 +117,7 @@ This is our running self-assessment. Items marked ⚠️ are still risks at the 
 | --- | --- | --- |
 | Select capability + geography | ✅ | `MapPage` filters |
 | See regional coverage | ✅ | District choropleth + stripe overlay |
-| Drill into facility records behind an aggregate | ⚠️ unverified | `DistrictPage` exists; need to confirm it lists individual facility rows with their evidence fields |
+| Drill into facility records behind an aggregate | ✅ * | `DistrictPage` is the drill-in. Lists every facility in the selected district as a `FacilityCard` with name, type, city, completeness %, and an expand toggle revealing specialties, description, doctor count, phone, and source links. Right panel adds the AI assessment + NFHS-5 indicators alongside. |
 | Save a planning scenario | ✅ | `WorkspacePage` + `scenarios` API |
 
 ### Beyond the minimum workflow (ambition)
