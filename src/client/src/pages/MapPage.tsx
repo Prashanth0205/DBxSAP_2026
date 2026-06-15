@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { CoverageMap } from '../components/CoverageMap';
 import { DistrictPopup } from '../components/DistrictPopup';
-import { CAPABILITY_TAGS, DistrictCoverage, CapabilityTag, gapColor } from '../lib/types';
+import {
+  CAPABILITY_TAGS, DistrictCoverage, CapabilityTag,
+  categorizeDistrict, CATEGORY_META, DistrictCategory,
+} from '../lib/types';
 
 const INDIA_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -47,8 +50,21 @@ export function MapPage() {
     }
   }
 
-  const deserts = districts.filter(d => d.gap_score <= 1);
-  const sorted = [...districts].sort((a, b) => a.gap_score - b.gap_score);
+  const categorized = districts.map(d => ({ ...d, category: categorizeDistrict(d) }));
+  const counts: Record<DistrictCategory, number> = {
+    real_desert: 0, data_poor: 0, hidden_risk: 0, adequate: 0,
+  };
+  categorized.forEach(d => { counts[d.category]++; });
+
+  // Sort: real_desert > hidden_risk > data_poor > adequate, then by gap_score asc
+  const categoryOrder: Record<DistrictCategory, number> = {
+    real_desert: 0, hidden_risk: 1, data_poor: 2, adequate: 3,
+  };
+  const sorted = [...categorized].sort((a, b) => {
+    const co = categoryOrder[a.category] - categoryOrder[b.category];
+    if (co !== 0) return co;
+    return a.gap_score - b.gap_score;
+  });
 
   return (
     <div className="h-full flex">
@@ -105,11 +121,16 @@ export function MapPage() {
           {error && <p className="text-[11px] text-red-400">{error}</p>}
         </div>
 
-        {/* Summary stats */}
+        {/* Category breakdown */}
         {districts.length > 0 && (
-          <div className="flex-shrink-0 grid grid-cols-2 gap-px bg-white/8 border-b border-white/8">
-            <StatCell label="Districts" value={districts.length} />
-            <StatCell label="Deserts" value={deserts.length} accent />
+          <div className="flex-shrink-0 border-b border-white/8 p-3 space-y-1.5">
+            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-1.5">
+              Categories
+            </p>
+            <CategoryRow category="real_desert" count={counts.real_desert} />
+            <CategoryRow category="hidden_risk" count={counts.hidden_risk} />
+            <CategoryRow category="data_poor"   count={counts.data_poor} />
+            <CategoryRow category="adequate"    count={counts.adequate} />
           </div>
         )}
 
@@ -126,36 +147,35 @@ export function MapPage() {
           ) : (
             <div>
               <p className="px-4 pt-3 pb-1.5 text-[10px] font-semibold text-white/30 uppercase tracking-widest">
-                Worst gaps
+                Districts by priority
               </p>
-              {sorted.slice(0, 30).map((d, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleDistrictClick(d.district, d.state)}
-                  className="w-full text-left px-4 py-2.5 border-b border-white/5 hover:bg-white/5 transition-colors group"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-white/80 group-hover:text-white truncate">
-                        {d.district}
-                      </p>
-                      <p className="text-[10px] text-white/35 truncate">{d.state}</p>
+              {sorted.slice(0, 30).map((d, i) => {
+                const meta = CATEGORY_META[d.category];
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleDistrictClick(d.district, d.state)}
+                    className="w-full text-left px-4 py-2.5 border-b border-white/5 hover:bg-white/5 transition-colors group"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-white/80 group-hover:text-white truncate">
+                          {d.district}
+                        </p>
+                        <p className="text-[10px] text-white/35 truncate">{d.state}</p>
+                      </div>
+                      <div className="flex-shrink-0 flex items-center gap-1.5">
+                        <span
+                          className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                          style={{ background: meta.color + '33', color: meta.color }}
+                        >
+                          {meta.shortLabel}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex-shrink-0 flex items-center gap-1.5">
-                      {d.confidence < 0.45 && (
-                        <span className="text-amber-500/70 text-[10px]">~</span>
-                      )}
-                      <span
-                        className="text-[10px] font-semibold tabular-nums"
-                        style={{ color: gapColor(d.gap_score) }}
-                      >
-                        {d.gap_score.toFixed(1)}
-                      </span>
-                      <GapBar score={d.gap_score} />
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -188,27 +208,18 @@ export function MapPage() {
 
 // ── Micro components ──────────────────────────────────────────────────────
 
-function StatCell({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
+function CategoryRow({ category, count }: { category: DistrictCategory; count: number }) {
+  const meta = CATEGORY_META[category];
   return (
-    <div className="bg-[#0e1117] px-4 py-3">
-      <p className="text-[10px] text-white/35 uppercase tracking-widest">{label}</p>
-      <p className={`text-xl font-bold mt-0.5 ${accent ? 'text-[#e07340]' : 'text-white'}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function GapBar({ score }: { score: number }) {
-  // Min 12% width so a gap_score of 0 still reads as "data present, scored zero"
-  // rather than visually empty (Bihar maternity etc. have lots of true zeros).
-  const widthPct = Math.max(12, (score / 10) * 100);
-  return (
-    <div className="w-7 h-1.5 bg-white/10 rounded-full overflow-hidden">
-      <div
-        className="h-full rounded-full"
-        style={{ width: `${widthPct}%`, background: gapColor(score) }}
-      />
+    <div className="flex items-center justify-between gap-2 text-xs">
+      <div className="flex items-center gap-2 min-w-0">
+        <span
+          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+          style={{ background: meta.color }}
+        />
+        <span className="text-white/70 truncate">{meta.label}</span>
+      </div>
+      <span className="text-white font-semibold tabular-nums">{count}</span>
     </div>
   );
 }
