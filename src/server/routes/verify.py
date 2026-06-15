@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Path, BackgroundTasks
 
 from server.db import query as db_query, execute
+from server.warehouse import wh_query, TBL_FACILITIES
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -12,8 +13,8 @@ async def _run_and_store(facility_id: str):
     """Background task: run agent verification and persist result to DB."""
     from server.agent import run_verification
 
-    rows = db_query(
-        "SELECT * FROM public.facilities WHERE unique_id = %s LIMIT 1",
+    rows = wh_query(
+        f"SELECT * FROM {TBL_FACILITIES} WHERE unique_id = :p1 LIMIT 1",
         [facility_id],
     )
     if not rows:
@@ -82,7 +83,6 @@ def get_verification(facility_id: str = Path(...)):
     if not rows:
         return {"status": "not_verified"}
     row = rows[0]
-    # Parse sources from JSONB string if needed
     if isinstance(row.get("sources"), str):
         try:
             row["sources"] = json.loads(row["sources"])
