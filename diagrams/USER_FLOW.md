@@ -1,0 +1,133 @@
+# Disha User Flow
+
+```
+┌─────────────────────────┐
+│   User Opens Disha      │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│  Enter Search Criteria  │
+│  • State (required)     │
+│  • District (optional)  │
+│  • Capability (required)│
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│     Submit Query        │
+└────┬───────────────┬────┘
+     │               │
+     ▼               ▼
+┌──────────┐    ┌──────────┐
+│Database  │    │Web Search│
+│  Agent   │    │  Agent   │
+│          │    │          │
+│SQL filter│    │Search for│
+│by state +│    │state +   │
+│capability│    │capability│
+│          │    │articles  │
+│Returns   │    │          │
+│~500      │    │Returns   │
+│facilities│    │5-10 links│
+└────┬─────┘    └────┬─────┘
+     │               │
+     └───────┬───────┘
+             │
+             ▼
+    ┌────────────────┐
+    │ Orchestrator   │
+    │      LLM       │
+    │                │
+    │Compares DB data│
+    │vs Web evidence │
+    │                │
+    │ Calculates     │
+    │ Confidence     │
+    │   Scores       │
+    └────────┬───────┘
+             │
+             ▼
+       ┌─────────┐
+       │District │
+       │specified│
+       │in query?│
+       └──┬───┬──┘
+          │   │
+      No  │   │  Yes
+          │   │
+          ▼   ▼
+    ┌─────────┐  ┌─────────────┐
+    │Full Map │  │Map+Popup    │
+    │         │  │             │
+    │All      │  │District     │
+    │districts│  │highlighted  │
+    │shown    │  │             │
+    │         │  │Expanded     │
+    │         │  │popup auto-  │
+    │         │  │opened       │
+    └────┬────┘  └──────┬──────┘
+         │              │
+         └──────┬───────┘
+                │
+                ▼
+        ┌───────────────┐
+        │User interacts │
+        │with map       │
+        │               │
+        │ Hover: Tooltip│
+        │ • Facility    │
+        │   count       │
+        │ • Confidence  │
+        │   score       │
+        └───────┬───────┘
+                │
+                ▼
+        ┌───────────────┐
+        │ Click district│
+        └───────┬───────┘
+                │
+                ▼
+        ┌───────────────┐
+        │Collapsed Popup│
+        │               │
+        │• Facility     │
+        │  count        │
+        │• Confidence   │
+        │  score        │
+        │• Status badge │
+        │               │
+        │[See Details ▼]│
+        └───────┬───────┘
+                │
+                ▼
+        ┌───────────────┐
+        │Expanded Popup │
+        │               │
+        │• LLM Analysis │
+        │• Top Facilities│
+        │  + Trust      │
+        │  Scores       │
+        │• Contradictions│
+        │• Web Sources  │
+        │               │
+        │Medical Desert │
+        │Details Shown  │
+        └───────────────┘
+```
+
+## Map Encoding
+
+**Color = Coverage Level:**
+- 🟥 Red (0-25%) = Critical gap
+- 🟧 Orange (25-50%) = High risk  
+- 🟨 Yellow (50-75%) = Moderate
+- 🟩 Green (75-100%) = Adequate
+
+**Pattern = Data Quality:**
+- ████ Solid = High confidence (trust ≥70)
+- ▓▓▓▓ Stripe = Low confidence (trust <70)
+
+**Examples:**
+- 🟥 Solid = Confirmed gap
+- 🟥 Stripe = Possible gap, data too sparse
