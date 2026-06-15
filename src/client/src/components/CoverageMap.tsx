@@ -185,10 +185,14 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
               ),
             } as GeoJSON.FeatureCollection);
             map.fitBounds(fl.getBounds(), { padding: [20, 20] });
-          } catch {}
+          } catch (err) {
+            console.warn('[CoverageMap] fitBounds failed', err);
+          }
         }
       })
-      .catch(() => {});
+      .catch(err => {
+        console.error('[CoverageMap] district choropleth render failed', err);
+      });
 
     return () => {
       layerRef.current?.remove();
@@ -217,7 +221,9 @@ function StateBoundaries() {
         }).addTo(map);
         added.current = true;
       })
-      .catch(() => {});
+      .catch(err => {
+        console.error('[CoverageMap] state boundaries render failed', err);
+      });
   }, [map]);
   return null;
 }

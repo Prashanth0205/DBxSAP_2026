@@ -57,7 +57,7 @@ def health():
 # Serve React build in production. Mount /assets and known root-level static files
 # directly, then fall back to index.html so React Router handles client-side routes
 # like /map, /district/<id>, /workspace.
-_dist = os.path.join(os.path.dirname(__file__), "..", "client", "dist")
+_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "client", "dist"))
 if os.path.exists(_dist):
     _assets = os.path.join(_dist, "assets")
     if os.path.isdir(_assets):
