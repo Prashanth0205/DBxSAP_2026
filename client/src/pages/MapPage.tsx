@@ -1,155 +1,213 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { CoverageMap } from '../components/CoverageMap';
-import { CAPABILITY_TAGS, CoverageRegion, CapabilityTag } from '../lib/types';
+import { CAPABILITY_TAGS, DistrictCoverage, CapabilityTag, gapColor, confidenceLabel } from '../lib/types';
+
+const INDIA_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
+  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
+  'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Puducherry',
+];
 
 export function MapPage() {
-  const [capability, setCapability] = useState<CapabilityTag>('dialysis');
-  const [selectedStates, setSelectedStates] = useState<string[]>([]);
-  const [allStates, setAllStates] = useState<string[]>([]);
-  const [minConfidence, setMinConfidence] = useState(0.5);
-  const [regions, setRegions] = useState<CoverageRegion[]>([]);
+  const [capability, setCapability] = useState<CapabilityTag>('maternity');
+  const [state, setState] = useState('');
+  const [districts, setDistricts] = useState<DistrictCoverage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasQueried, setHasQueried] = useState(false);
   const navigate = useNavigate();
-
-  // Load state list on mount
-  useEffect(() => {
-    fetch('/api/states')
-      .then(r => r.json())
-      .then(setAllStates)
-      .catch(() => {
-        // States API not yet available — that's fine during dev
-      });
-  }, []);
 
   async function analyze() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({
-        capability,
-        states: selectedStates.join(','),
-        minConfidence: String(minConfidence),
-      });
-      const data: CoverageRegion[] = await fetch(`/api/coverage?${params}`).then(r => {
-        if (!r.ok) throw new Error(`API error: ${r.statusText}`);
+      const params = new URLSearchParams({ capability });
+      if (state) params.set('state', state);
+      const data: DistrictCoverage[] = await fetch(`/api/coverage?${params}`).then(r => {
+        if (!r.ok) throw new Error(`API ${r.status}: ${r.statusText}`);
         return r.json();
       });
-      setRegions(data);
+      setDistricts(data);
+      setHasQueried(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load coverage data');
+      setError(e instanceof Error ? e.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
   }
 
-  function handleCityClick(city: string, state: string) {
-    navigate(
-      `/facility/list?city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&capability=${capability}&minConfidence=${minConfidence}`
-    );
+  function handleDistrictClick(district: string, districtState: string) {
+    navigate(`/district/${encodeURIComponent(district)}?state=${encodeURIComponent(districtState)}&capability=${capability}`);
   }
 
+  const deserts = districts.filter(d => d.gap_score <= 1);
+  const sorted = [...districts].sort((a, b) => a.gap_score - b.gap_score);
+
   return (
-    <div className="space-y-4 max-w-6xl mx-auto">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Coverage Map</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Select a capability and region to see where care exists — and where it doesn't.
-          Faded markers mean sparse data; the gap may not be real.
-        </p>
-      </div>
+    <div className="h-full flex">
+      {/* ── Left sidebar ── */}
+      <aside className="w-72 flex-shrink-0 flex flex-col bg-[#0e1117] border-r border-white/8 overflow-hidden">
 
-      {/* Query Builder */}
-      <div className="flex flex-wrap gap-4 items-end p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Capability</label>
-          <select
-            className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF3621]"
-            value={capability}
-            onChange={e => setCapability(e.target.value as CapabilityTag)}
-          >
-            {CAPABILITY_TAGS.map(t => (
-              <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="min-w-[200px]">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            States (hold Ctrl/Cmd to multi-select)
-          </label>
-          <select
-            multiple
-            className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full h-20 focus:outline-none focus:ring-2 focus:ring-[#FF3621]"
-            value={selectedStates}
-            onChange={e =>
-              setSelectedStates(Array.from(e.target.selectedOptions, o => o.value))
-            }
-          >
-            {allStates.map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Min Confidence: <span className="text-[#FF3621] font-semibold">{minConfidence.toFixed(2)}</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={minConfidence}
-            onChange={e => setMinConfidence(parseFloat(e.target.value))}
-            className="w-36 accent-[#FF3621]"
-          />
-        </div>
-
-        <button
-          onClick={analyze}
-          disabled={loading}
-          className="px-5 py-2 bg-[#FF3621] text-white rounded-lg font-medium text-sm hover:bg-[#cc2b1a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Analyzing…' : 'Analyze Coverage'}
-        </button>
-      </div>
-
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {/* Map */}
-      {regions.length > 0 ? (
-        <>
-          <CoverageMap regions={regions} onCityClick={handleCityClick} />
-          <p className="text-xs text-gray-400">
-            {regions.length} regions shown. Click any circle to drill into its facilities.
-          </p>
-        </>
-      ) : (
-        !loading && (
-          <div className="h-64 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-gray-400">
-            Select a capability and click <span className="font-semibold mx-1">Analyze Coverage</span> to see the map.
+        {/* Controls */}
+        <div className="flex-shrink-0 p-4 border-b border-white/8 space-y-4">
+          {/* Capability */}
+          <div>
+            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2">
+              Capability
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {CAPABILITY_TAGS.map(t => (
+                <button
+                  key={t.value}
+                  onClick={() => setCapability(t.value)}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                    capability === t.value
+                      ? 'bg-[#e07340] text-white'
+                      : 'bg-white/6 text-white/50 hover:bg-white/10 hover:text-white/80'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
-        )
-      )}
 
-      {loading && (
-        <div className="h-64 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-gray-500">
-          <div className="flex items-center gap-2">
-            <svg className="animate-spin h-5 w-5 text-[#FF3621]" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            Loading coverage data…
+          {/* State filter */}
+          <div>
+            <label className="block text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-2">
+              State
+            </label>
+            <select
+              className="w-full bg-white/6 border border-white/10 rounded px-2.5 py-1.5 text-xs text-white/70 focus:outline-none focus:border-[#e07340]/60 appearance-none"
+              value={state}
+              onChange={e => setState(e.target.value)}
+            >
+              <option value="">All states</option>
+              {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
+
+          <button
+            onClick={analyze}
+            disabled={loading}
+            className="w-full py-2 bg-[#e07340] hover:bg-[#c8612e] text-white rounded text-xs font-semibold tracking-wide transition-colors disabled:opacity-40"
+          >
+            {loading ? 'Analyzing…' : 'Analyze Coverage'}
+          </button>
+
+          {error && <p className="text-[11px] text-red-400">{error}</p>}
         </div>
-      )}
+
+        {/* Summary stats */}
+        {districts.length > 0 && (
+          <div className="flex-shrink-0 grid grid-cols-2 gap-px bg-white/8 border-b border-white/8">
+            <StatCell label="Districts" value={districts.length} />
+            <StatCell label="Deserts" value={deserts.length} accent />
+          </div>
+        )}
+
+        {/* Ranked district list */}
+        <div className="flex-1 overflow-y-auto">
+          {districts.length === 0 && !loading ? (
+            <div className="p-5 text-center text-white/25 text-xs leading-relaxed mt-6">
+              Select a capability<br />and run analysis
+            </div>
+          ) : loading ? (
+            <div className="flex items-center justify-center h-24">
+              <Spinner />
+            </div>
+          ) : (
+            <div>
+              <p className="px-4 pt-3 pb-1.5 text-[10px] font-semibold text-white/30 uppercase tracking-widest">
+                Worst gaps
+              </p>
+              {sorted.slice(0, 30).map((d, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleDistrictClick(d.district, d.state)}
+                  className="w-full text-left px-4 py-2.5 border-b border-white/5 hover:bg-white/5 transition-colors group"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-white/80 group-hover:text-white truncate">
+                        {d.district}
+                      </p>
+                      <p className="text-[10px] text-white/35 truncate">{d.state}</p>
+                    </div>
+                    <div className="flex-shrink-0 flex items-center gap-1.5">
+                      {d.confidence < 0.45 && (
+                        <span className="text-amber-500/70 text-[10px]">~</span>
+                      )}
+                      <GapBar score={d.gap_score} />
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* ── Map panel ── */}
+      <div className="flex-1 relative min-w-0">
+        {!hasQueried ? (
+          <MapPlaceholder />
+        ) : (
+          <CoverageMap districts={districts} onDistrictClick={handleDistrictClick} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Micro components ──────────────────────────────────────────────────────
+
+function StatCell({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
+  return (
+    <div className="bg-[#0e1117] px-4 py-3">
+      <p className="text-[10px] text-white/35 uppercase tracking-widest">{label}</p>
+      <p className={`text-xl font-bold mt-0.5 ${accent ? 'text-[#e07340]' : 'text-white'}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function GapBar({ score }: { score: number }) {
+  const w = Math.max(3, Math.round((score / 10) * 28));
+  return (
+    <div className="w-7 h-1.5 bg-white/10 rounded-full overflow-hidden">
+      <div
+        className="h-full rounded-full"
+        style={{ width: `${(score / 10) * 100}%`, background: gapColor(score) }}
+      />
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg className="animate-spin h-4 w-4 text-white/30" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+    </svg>
+  );
+}
+
+function MapPlaceholder() {
+  return (
+    <div className="h-full flex flex-col items-center justify-center text-center gap-3 bg-[#111318]">
+      <div className="w-14 h-14 rounded-full border border-white/10 flex items-center justify-center">
+        <svg className="w-6 h-6 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+        </svg>
+      </div>
+      <p className="text-white/25 text-sm">Select a capability and run analysis</p>
     </div>
   );
 }

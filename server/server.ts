@@ -65,6 +65,17 @@ app.post('/api/notes', (req, res) => {
   res.status(201).json({ id: 'stub', ...req.body });
 });
 
+// GET /api/scenarios/diff?a=<id>&b=<id>
+app.get('/api/scenarios/diff', (_req, res) => {
+  // TODO (Dev A): replace with set-intersection SQL query
+  // SELECT city, state, latitude, longitude,
+  //   COUNT(CASE WHEN scenario_id = :a AND scenario_id = :b THEN 1 END) AS overlap_count,
+  //   COUNT(CASE WHEN scenario_id = :a THEN 1 END) - overlap_count AS only_a,
+  //   COUNT(CASE WHEN scenario_id = :b THEN 1 END) - overlap_count AS only_b
+  // FROM shortlist_items GROUP BY city, state, latitude, longitude
+  res.json([]);
+});
+
 // ---------------------------------------------------------------------------
 // Static files (production)
 // ---------------------------------------------------------------------------
