@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { DistrictCoverage, gapColor } from '../lib/types';
+import {
+  DistrictCoverage, categorizeDistrict, categoryColor, CATEGORY_META, DistrictCategory,
+} from '../lib/types';
 
 interface Props {
   districts: DistrictCoverage[];
@@ -39,11 +41,12 @@ function injectStripePatterns(map: L.Map) {
     svg.insertBefore(defs, svg.firstChild);
   }
 
-  const PATTERNS = [
-    { id: 'stripe-desert',  color: '#dc2626' },
-    { id: 'stripe-severe',  color: '#f97316' },
-    { id: 'stripe-partial', color: '#eab308' },
-    { id: 'stripe-served',  color: '#16a34a' },
+  // One stripe pattern per category — used when data confidence is low
+  const PATTERNS: Array<{ id: string; color: string }> = [
+    { id: 'stripe-real_desert', color: CATEGORY_META.real_desert.color },
+    { id: 'stripe-hidden_risk', color: CATEGORY_META.hidden_risk.color },
+    { id: 'stripe-data_poor',   color: CATEGORY_META.data_poor.color },
+    { id: 'stripe-adequate',    color: CATEGORY_META.adequate.color },
   ];
 
   for (const { id, color } of PATTERNS) {
@@ -75,11 +78,8 @@ function injectStripePatterns(map: L.Map) {
   }
 }
 
-function gapStripeUrl(score: number): string {
-  if (score <= 1) return 'url(#stripe-desert)';
-  if (score <= 3) return 'url(#stripe-severe)';
-  if (score <= 6) return 'url(#stripe-partial)';
-  return 'url(#stripe-served)';
+function categoryStripeUrl(category: DistrictCategory): string {
+  return `url(#stripe-${category})`;
 }
 
 function ChoroplethLayer({ districts, onDistrictClick }: Props) {
@@ -93,10 +93,10 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
     }
     if (districts.length === 0) return;
 
-    // Build lookup: normalised district name → coverage row
-    const byName = new Map<string, DistrictCoverage>();
+    // Build lookup: normalised district name → coverage row + category
+    const byName = new Map<string, DistrictCoverage & { category: DistrictCategory }>();
     for (const d of districts) {
-      byName.set(norm(d.district), d);
+      byName.set(norm(d.district), { ...d, category: categorizeDistrict(d) });
     }
 
     fetchDistricts()
@@ -115,7 +115,7 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
             }
             const isSparse = row.confidence < 0.45;
             return {
-              fillColor: isSparse ? gapStripeUrl(row.gap_score) : gapColor(row.gap_score),
+              fillColor: isSparse ? categoryStripeUrl(row.category) : categoryColor(row.category),
               fillOpacity: isSparse ? 1 : 0.75,
               color: 'rgba(255,255,255,0.12)',
               weight: 0.8,
@@ -128,13 +128,14 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
 
             if (row) {
               const isSparse = row.confidence < 0.45;
+              const meta = CATEGORY_META[row.category];
               featureLayer.bindTooltip(
-                `<div style="min-width:170px">
+                `<div style="min-width:180px">
                   <p style="font-weight:600;margin:0 0 3px">${row.district}</p>
                   <p style="color:#64748b;margin:0 0 5px;font-size:11px">${row.state}</p>
                   <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-                    <span style="background:${gapColor(row.gap_score)};color:white;font-size:11px;font-weight:700;padding:1px 7px;border-radius:4px">
-                      ${row.gap_score.toFixed(1)}
+                    <span style="background:${meta.color};color:white;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px">
+                      ${meta.shortLabel}
                     </span>
                     <span style="font-size:11px;color:#475569">
                       ${row.matching_facilities}/${row.total_facilities} matching
@@ -223,11 +224,21 @@ function StateBoundaries() {
 }
 
 export function CoverageMap({ districts, onDistrictClick }: Props) {
+  // India bounding box: roughly SW corner (Kanyakumari) → NE corner (Arunachal)
+  const INDIA_BOUNDS: L.LatLngBoundsLiteral = [
+    [6.5, 68.0],   // southwest
+    [37.5, 97.5],  // northeast
+  ];
+
   return (
     <div className="relative h-full w-full">
       <MapContainer
         center={[22, 80]}
         zoom={5}
+        minZoom={4}
+        maxZoom={10}
+        maxBounds={INDIA_BOUNDS}
+        maxBoundsViscosity={1.0}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom
         zoomControl={false}
@@ -235,11 +246,15 @@ export function CoverageMap({ districts, onDistrictClick }: Props) {
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
+          bounds={INDIA_BOUNDS}
+          noWrap
         />
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
           attribution=""
           pane="shadowPane"
+          bounds={INDIA_BOUNDS}
+          noWrap
         />
         <StateBoundaries />
         <ChoroplethLayer districts={districts} onDistrictClick={onDistrictClick} />
@@ -251,40 +266,27 @@ export function CoverageMap({ districts, onDistrictClick }: Props) {
 }
 
 function MapLegend() {
+  const categories: DistrictCategory[] = ['real_desert', 'hidden_risk', 'data_poor', 'adequate'];
   return (
-    <div className="absolute bottom-5 right-4 z-[9999] bg-[#1a1d23]/90 backdrop-blur rounded-lg px-3 py-2.5 text-xs border border-white/10">
-      <p className="font-semibold mb-2 text-white/50 uppercase tracking-widest text-[10px]">Gap Score</p>
+    <div className="absolute bottom-5 right-4 z-[9999] bg-[#1a1d23]/90 backdrop-blur rounded-lg px-3 py-2.5 text-xs border border-white/10 max-w-[260px]">
+      <p className="font-semibold mb-2 text-white/50 uppercase tracking-widest text-[10px]">Categories</p>
       <div className="space-y-1.5">
-        {[
-          { color: '#dc2626', label: '0–1  Desert' },
-          { color: '#f97316', label: '2–3  Severe' },
-          { color: '#eab308', label: '4–6  Partial' },
-          { color: '#16a34a', label: '7–10 Served' },
-        ].map(({ color, label }) => (
-          <div key={label} className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
-            <span className="text-white/50">{label}</span>
-          </div>
-        ))}
+        {categories.map(cat => {
+          const meta = CATEGORY_META[cat];
+          return (
+            <div key={cat} className="flex items-start gap-2">
+              <span className="w-3 h-3 rounded-sm flex-shrink-0 mt-0.5" style={{ background: meta.color }} />
+              <div className="text-white/60 leading-tight">
+                <p className="font-medium">{meta.label}</p>
+                <p className="text-[10px] text-white/35 mt-0.5">{meta.description}</p>
+              </div>
+            </div>
+          );
+        })}
 
-        <div className="pt-1.5 mt-1 border-t border-white/10 space-y-1.5">
-          <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold">Data Quality</p>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{
-              background: 'repeating-linear-gradient(45deg, rgba(220,38,38,0.18) 0px, rgba(220,38,38,0.18) 2px, transparent 2px, transparent 5px), rgba(220,38,38,0.18)',
-              outline: '1px solid rgba(220,38,38,0.5)',
-            }} />
-            <span className="text-white/40">Striped = sparse, uncertain</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: '#dc2626', opacity: 0.75 }} />
-            <span className="text-white/40">Solid = confirmed</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+        <div className="flex items-center gap-2 pt-1.5 mt-1 border-t border-white/10">
           <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: '#1e2433' }} />
-          <span className="text-white/25">No data</span>
+          <span className="text-white/25 text-[10px]">No data</span>
         </div>
       </div>
     </div>

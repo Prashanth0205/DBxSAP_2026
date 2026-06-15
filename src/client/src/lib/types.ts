@@ -174,3 +174,88 @@ export function confidenceBadgeClass(c: number): string {
   if (c >= 0.45) return 'bg-amber-100 text-amber-800';
   return 'bg-red-100 text-red-700';
 }
+
+// ---------------------------------------------------------------------------
+// District Categorization (based on Track 2 spec)
+//
+// Cross-references facility coverage with NFHS-5 health outcomes to
+// distinguish three meaningful categories:
+//
+//   real_desert  — sparse facilities AND poor health outcomes
+//   data_poor    — sparse facilities BUT adequate health outcomes
+//                  (under-sampled, not under-served)
+//   hidden_risk  — adequate facility count BUT poor health outcomes
+//                  (capability mismatch, low-trust evidence)
+//   adequate     — adequate facilities AND adequate health outcomes
+// ---------------------------------------------------------------------------
+
+export type DistrictCategory = 'real_desert' | 'data_poor' | 'hidden_risk' | 'adequate';
+
+export const CATEGORY_META: Record<DistrictCategory, {
+  label: string;
+  shortLabel: string;
+  color: string;
+  description: string;
+}> = {
+  real_desert: {
+    label: 'Real Medical Desert',
+    shortLabel: 'Desert',
+    color: '#dc2626',
+    description: 'Sparse facility coverage AND poor health outcomes',
+  },
+  data_poor: {
+    label: 'Data-Poor Region',
+    shortLabel: 'Data Poor',
+    color: '#6b7280',
+    description: 'Sparse facility coverage but adequate health outcomes (under-sampled, not under-served)',
+  },
+  hidden_risk: {
+    label: 'Hidden Risk',
+    shortLabel: 'Hidden Risk',
+    color: '#f59e0b',
+    description: 'Adequate facility count but poor health outcomes (capability mismatch, low-trust evidence)',
+  },
+  adequate: {
+    label: 'Adequate Coverage',
+    shortLabel: 'Adequate',
+    color: '#16a34a',
+    description: 'Adequate facilities and adequate health outcomes',
+  },
+};
+
+/**
+ * Categorize a district based on facility coverage AND health outcomes.
+ *
+ * Sparse coverage:        gap_score <= 3 (less than ~30% matching facilities)
+ * Poor health outcomes:   institutional birth < 70% OR child stunting > 35%
+ *                         (or low data confidence falls back to gap_score signal)
+ */
+export function categorizeDistrict(d: DistrictCoverage): DistrictCategory {
+  const sparseCoverage = d.gap_score <= 3;
+
+  // Health outcome heuristics from NFHS-5 (lower = worse)
+  const instBirth = d.institutional_birth_5y_pct;
+  const stunting = d.child_stunting_pct;
+
+  const hasHealthData = instBirth != null || stunting != null;
+
+  // If we have NFHS-5 data, use it; otherwise fall back to coverage signal
+  let poorHealth: boolean;
+  if (hasHealthData) {
+    const lowInstBirth = instBirth != null && instBirth < 70;
+    const highStunting = stunting != null && stunting > 35;
+    poorHealth = lowInstBirth || highStunting;
+  } else {
+    // No NFHS-5 data — can't distinguish data-poor from real desert
+    poorHealth = sparseCoverage;
+  }
+
+  if (sparseCoverage && poorHealth) return 'real_desert';
+  if (sparseCoverage && !poorHealth) return 'data_poor';
+  if (!sparseCoverage && poorHealth) return 'hidden_risk';
+  return 'adequate';
+}
+
+export function categoryColor(category: DistrictCategory): string {
+  return CATEGORY_META[category].color;
+}

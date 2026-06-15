@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { DistrictCoverage, gapColor } from '../lib/types';
+import {
+  DistrictCoverage, categorizeDistrict, CATEGORY_META,
+} from '../lib/types';
 
 interface Props {
   district: DistrictCoverage;
@@ -19,6 +21,9 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [loadingAssessment, setLoadingAssessment] = useState(false);
+
+  const category = categorizeDistrict(district);
+  const categoryMeta = CATEGORY_META[category];
 
   useEffect(() => {
     if (expanded && !assessment && !loadingAssessment) {
@@ -55,53 +60,40 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
     }
   }
 
-  const statusBadge = district.gap_score <= 1
-    ? { label: '🚨 Critical Gap', color: 'bg-red-500' }
-    : district.gap_score <= 3
-    ? { label: '⚠️ High Risk', color: 'bg-orange-500' }
-    : district.gap_score <= 6
-    ? { label: '📋 Moderate', color: 'bg-yellow-500' }
-    : { label: '✅ Adequate', color: 'bg-green-500' };
-
   if (!expanded) {
     return (
-      <div className="bg-white rounded-lg shadow-2xl p-4 min-w-[280px] max-w-sm border border-gray-200">
+      <div className="relative bg-white rounded-lg shadow-2xl p-4 min-w-[280px] max-w-sm border border-gray-200">
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 text-lg leading-none w-6 h-6 flex items-center justify-center"
+        >
+          ✕
+        </button>
+
         <div className="space-y-3">
-          <div>
+          <div className="pr-6">
             <h3 className="text-lg font-bold text-gray-900">{district.district}</h3>
             <p className="text-sm text-gray-500">{district.state}</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div
-              className="px-2 py-0.5 rounded text-xs font-bold text-white"
-              style={{ background: gapColor(district.gap_score) }}
-            >
-              {district.gap_score.toFixed(1)}
-            </div>
-            <span className="text-sm text-gray-600">
-              {district.matching_facilities}/{district.total_facilities} facilities
-            </span>
+          <div
+            className="px-2.5 py-1 rounded text-xs font-semibold text-white inline-block"
+            style={{ background: categoryMeta.color }}
+          >
+            {categoryMeta.label}
           </div>
 
-          <div className={`px-2 py-1 rounded text-xs font-medium text-white ${statusBadge.color}`}>
-            {statusBadge.label}
+          <div className="text-sm text-gray-600">
+            {district.matching_facilities}/{district.total_facilities} matching facilities
           </div>
 
           <button
             onClick={() => setExpanded(true)}
-            className="w-full py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+            className="w-full py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors border border-blue-200"
           >
             See Details ▼
           </button>
         </div>
-
-        <button
-          onClick={onClose}
-          className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-        >
-          ✕
-        </button>
       </div>
     );
   }
@@ -116,23 +108,23 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl"
+            className="text-gray-400 hover:text-gray-600 text-xl leading-none w-6 h-6 flex items-center justify-center"
           >
             ✕
           </button>
         </div>
 
         <div className="border-t pt-4 space-y-3">
-          <div className="flex items-center gap-2">
+          <div>
             <div
-              className="px-2 py-1 rounded text-sm font-bold text-white"
-              style={{ background: gapColor(district.gap_score) }}
+              className="px-3 py-1.5 rounded text-sm font-semibold text-white inline-block"
+              style={{ background: categoryMeta.color }}
             >
-              Gap Score: {district.gap_score.toFixed(1)}/10
+              {categoryMeta.label}
             </div>
-            <div className={`px-2 py-1 rounded text-xs font-medium text-white ${statusBadge.color}`}>
-              {statusBadge.label}
-            </div>
+            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+              {categoryMeta.description}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -145,7 +137,7 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
               <p className="font-bold text-gray-900">{district.matching_facilities}</p>
             </div>
             <div className="bg-gray-50 p-2 rounded">
-              <p className="text-gray-500 text-xs">Confidence</p>
+              <p className="text-gray-500 text-xs">Data Confidence</p>
               <p className="font-bold text-gray-900">{Math.round(district.confidence * 100)}%</p>
             </div>
             {district.institutional_birth_5y_pct != null && (
@@ -211,7 +203,7 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
 
         <button
           onClick={() => setExpanded(false)}
-          className="w-full py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors mt-4"
+          className="w-full py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors mt-4 border border-gray-200"
         >
           Collapse ▲
         </button>
