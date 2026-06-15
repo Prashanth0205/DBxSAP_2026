@@ -20,18 +20,55 @@ git checkout master && git pull
 
 databricks bundle validate --profile DEFAULT
 databricks bundle deploy   --profile DEFAULT
+
+# bundle deploy uploads source but does NOT trigger an app rebuild —
+# explicitly redeploy the app from the uploaded source path:
+databricks apps deploy hackathon-2026 \
+  --source-code-path /Workspace/Users/$(whoami)@sap.com/.bundle/hackathon-2026/default/files/src \
+  --profile DEFAULT
+
 databricks apps logs hackathon-2026 --follow --profile DEFAULT
 ```
 
-What `bundle deploy` actually does:
+The two-step is intentional: `bundle deploy` is "upload artifacts + register resource definitions"; `apps deploy` is "rebuild and restart the app from those artifacts." If you skip the second step, the app keeps serving the previous deployment's source.
 
-1. Uploads `./src/` (the `source_code_path` from `databricks.yml`) to a workspace files location.
+What `bundle deploy` does:
+
+1. Uploads `./src/` (the `source_code_path` from `databricks.yml`) to `/Workspace/Users/<you>/.bundle/hackathon-2026/default/files/src`.
 2. Reconciles the `hackathon-2026` app resource — including the `postgres` and `sql-warehouse` resource grants on the app's service principal.
-3. Triggers the app to rebuild. Startup runs `npm run start` from `src/app.yaml`, which is the AppKit production server (`tsdown` build output + Vite client bundle).
+
+What `apps deploy` does:
+
+1. Tells the app platform to rebuild from the uploaded source path.
+2. Build runs `npm install` → `npm run postinstall` (which runs `appkit generate-types` and calls `DESCRIBE QUERY` against the warehouse) → `npm run build` (tsdown server + Vite client bundle).
+3. Once the build succeeds, app starts via `npm run start` from `src/app.yaml`.
 4. AppKit auto-injects runtime env vars from the resource refs:
    - `LAKEBASE_ENDPOINT` (from `valueFrom: postgres`)
    - `DATABRICKS_WAREHOUSE_ID` (from `valueFrom: sql-warehouse`)
    - `PGHOST`, `PGDATABASE`, `PGPORT`, `PGSSLMODE` (auto-injected by the platform)
+
+## One-time service-principal grants (catalog access)
+
+The app's service principal needs read access to the Delta Sharing catalog *outside* of what `databricks.yml` can express — `databricks.yml` resource permissions cover the warehouse and Lakebase, but not external catalogs the SQL queries reference.
+
+Find the SP client ID:
+
+```bash
+databricks apps get hackathon-2026 --profile DEFAULT -o json \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['service_principal_client_id'])"
+```
+
+Then grant against the source catalog (substitute the SP UUID from above):
+
+```sql
+GRANT USE CATALOG  ON CATALOG databricks_virtue_foundation_dataset_dais_2026                                      TO `<SP_CLIENT_ID>`;
+GRANT USE SCHEMA   ON SCHEMA  databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset            TO `<SP_CLIENT_ID>`;
+GRANT SELECT       ON TABLE   databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.facilities TO `<SP_CLIENT_ID>`;
+```
+
+Run via `databricks experimental aitools tools query "<SQL>" --profile DEFAULT`.
+
+Symptom if missing: `databricks apps deploy` fails with `INSUFFICIENT_PERMISSIONS … User does not have USE CATALOG on Catalog 'databricks_virtue_foundation_dataset_dais_2026'` during `npm run typegen` in the build phase.
 
 ## Verify after deploy
 
