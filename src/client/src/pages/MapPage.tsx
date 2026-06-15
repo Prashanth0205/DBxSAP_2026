@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
 import { CoverageMap } from '../components/CoverageMap';
+import { DistrictPopup } from '../components/DistrictPopup';
 import { CAPABILITY_TAGS, DistrictCoverage, CapabilityTag, gapColor } from '../lib/types';
 
 const INDIA_STATES = [
@@ -16,10 +16,10 @@ export function MapPage() {
   const [capability, setCapability] = useState<CapabilityTag>('maternity');
   const [state, setState] = useState('');
   const [districts, setDistricts] = useState<DistrictCoverage[]>([]);
+  const [selectedDistrict, setSelectedDistrict] = useState<DistrictCoverage | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasQueried, setHasQueried] = useState(false);
-  const navigate = useNavigate();
 
   async function analyze() {
     setLoading(true);
@@ -40,8 +40,11 @@ export function MapPage() {
     }
   }
 
-  function handleDistrictClick(district: string, districtState: string) {
-    navigate(`/district/${encodeURIComponent(district)}?state=${encodeURIComponent(districtState)}&capability=${capability}`);
+  function handleDistrictClick(districtName: string, districtState: string) {
+    const district = districts.find(d => d.district === districtName && d.state === districtState);
+    if (district) {
+      setSelectedDistrict(district);
+    }
   }
 
   const deserts = districts.filter(d => d.gap_score <= 1);
@@ -158,6 +161,19 @@ export function MapPage() {
           <MapPlaceholder />
         ) : (
           <CoverageMap districts={districts} onDistrictClick={handleDistrictClick} />
+        )}
+
+        {/* District Popup Overlay */}
+        {selectedDistrict && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-[10000] pointer-events-none">
+            <div className="pointer-events-auto">
+              <DistrictPopup
+                district={selectedDistrict}
+                capability={capability}
+                onClose={() => setSelectedDistrict(null)}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>
