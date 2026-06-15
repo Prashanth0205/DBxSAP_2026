@@ -10,7 +10,14 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_core.tools import tool
 from typing import Annotated
 
-from server.db import query as db_query
+from server.warehouse import (
+    wh_query,
+    alias_ctes,
+    normalize_state,
+    TBL_FACILITIES,
+    TBL_PINCODE,
+    TBL_NFHS5,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,32 +74,50 @@ async def _invoke_with_retry(llm: ChatBedrockConverse, messages: list) -> AIMess
 
 @tool
 def query_database(
-    sql: Annotated[str, "A read-only SELECT statement against the Lakebase Postgres database."],
+    sql: Annotated[str, "A read-only Spark SQL SELECT statement against the Databricks SQL warehouse."],
 ) -> str:
     """
-    Execute a read-only SQL query against the Lakebase database.
-    Available tables:
-      - public.facilities          (unique_id, name, specialties, capability, description,
-                                    address_city, address_stateorregion, address_zipOrPostcode,
-                                    latitude, longitude, numberDoctors, phone_numbers, source)
-      - public.pincode_directory   (pincode, district, statename)
-      - public.nfhs5_health_indicators (district_name, state_ut, institutional_birth_5y_pct,
-                                        child_u5_who_are_stunted_height_for_age_18_pct,
-                                        births_attended_by_skilled_hp_5y_10_pct,
-                                        mothers_who_had_at_least_4_anc_visits_lb5y_pct,
-                                        hh_electricity_pct, hh_improved_water_pct,
-                                        hh_member_covered_health_insurance_pct,
-                                        w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct,
-                                        w15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
-                                        m15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
-                                        women_age_30_49_years_ever_undergone_a_cervical_screen_pct,
-                                        women_age_30_49_years_ever_undergone_a_breast_exam_pct)
-    Only SELECT is allowed.
+    Execute a read-only Spark SQL query against the Databricks SQL warehouse.
+
+    Available tables (fully qualified):
+      - databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.facilities
+          (unique_id, name, specialties, capability, description, organization_type,
+           address_city, address_stateOrRegion, address_zipOrPostcode,
+           latitude, longitude, numberDoctors, phone_numbers, source, yearEstablished, equipment, procedure)
+      - databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.india_post_pincode_directory
+          (pincode, district, statename, officename)
+      - databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.nfhs_5_district_health_indicators
+          (district_name, state_ut, institutional_birth_5y_pct,
+           child_u5_who_are_stunted_height_for_age_18_pct,
+           births_attended_by_skilled_hp_5y_10_pct,
+           mothers_who_had_at_least_4_anc_visits_lb5y_pct,
+           hh_electricity_pct, hh_improved_water_pct,
+           hh_member_covered_health_insurance_pct,
+           w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct,
+           w15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
+           m15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
+           women_age_30_49_years_ever_undergone_a_cervical_screen_pct,
+           women_age_30_49_years_ever_undergone_a_breast_exam_pct)
+
+    Spark SQL syntax notes (NOT Postgres):
+      - Use LOWER(col) LIKE LOWER('%foo%') instead of ILIKE.
+      - Use CAST(x AS DOUBLE) / CAST(x AS STRING), not ::float / ::text.
+      - String columns may contain literal 'null' or '' for missing data —
+        always filter `col NOT IN ('', 'null')`.
+      - NFHS-5 has spelling quirks: state spelled "Maharastra" (no 'h'),
+        " Lakshadweep " has leading space. Pincode dir uses UPPERCASE +
+        'AND' (e.g. "JAMMU AND KASHMIR"); NFHS uses Title case + '&'.
+        Normalize both sides before joining.
+      - Joins: facilities.address_zipOrPostcode = CAST(pincode_dir.pincode AS STRING)
+        bridges facility → district. Then join district to NFHS-5.
+
+    Only SELECT (and WITH … SELECT) is allowed.
     """
-    if not sql.strip().upper().startswith("SELECT"):
-        return json.dumps({"error": "Only SELECT statements are allowed."})
+    s = sql.strip().upper()
+    if not (s.startswith("SELECT") or s.startswith("WITH")):
+        return json.dumps({"error": "Only SELECT or WITH … SELECT statements are allowed."})
     try:
-        rows = db_query(sql)
+        rows = wh_query(sql)
         return json.dumps(rows[:50])
     except Exception as e:
         LOGGER.error(f"agent | query_database failed: {e}")
@@ -203,35 +228,38 @@ async def run_batch_assessment(
     LOGGER.info(f"batch | starting assessment for {len(districts)} districts in {state} [{capability}]")
 
     # ── Step 1: DB Agent ──────────────────────────────────────────────────────
-    # Fetch NFHS-5 rows for all districts in the state in one query
+    # Fetch NFHS-5 rows for all districts in the state via the warehouse, with
+    # alias resolution (NFHS spells "Maharastra", uses "Bid" for "Beed", etc.)
     district_names = [d["district"] for d in districts]
-    placeholders = ", ".join(["%s"] * len(district_names))
+    state_canon = normalize_state(state)
 
     try:
-        nfhs5_rows = db_query(
+        nfhs5_rows = wh_query(
             f"""
-            SELECT district_name, state_ut,
-                   institutional_birth_5y_pct,
-                   births_attended_by_skilled_hp_5y_10_pct,
-                   mothers_who_had_at_least_4_anc_visits_lb5y_pct,
-                   child_u5_who_are_stunted_height_for_age_18_pct,
-                   hh_electricity_pct, hh_improved_water_pct,
-                   hh_member_covered_health_insurance_pct,
-                   w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct,
-                   w15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
-                   m15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
-                   women_age_30_49_years_ever_undergone_a_cervical_screen_pct,
-                   women_age_30_49_years_ever_undergone_a_breast_exam_pct
-            FROM public.nfhs5_health_indicators
-            WHERE LOWER(state_ut) = LOWER(%s)
-              AND LOWER(district_name) IN ({placeholders})
+            WITH {alias_ctes()}
+            SELECT
+              district_canon AS district_canon,
+              CAST(institutional_birth_5y_pct                                   AS DOUBLE) AS institutional_birth_5y_pct,
+              CAST(births_attended_by_skilled_hp_5y_10_pct                     AS DOUBLE) AS births_attended_by_skilled_hp_5y_10_pct,
+              CAST(mothers_who_had_at_least_4_anc_visits_lb5y_pct              AS DOUBLE) AS mothers_who_had_at_least_4_anc_visits_lb5y_pct,
+              CAST(child_u5_who_are_stunted_height_for_age_18_pct              AS DOUBLE) AS child_u5_who_are_stunted_height_for_age_18_pct,
+              CAST(hh_electricity_pct                                          AS DOUBLE) AS hh_electricity_pct,
+              CAST(hh_improved_water_pct                                       AS DOUBLE) AS hh_improved_water_pct,
+              CAST(hh_member_covered_health_insurance_pct                      AS DOUBLE) AS hh_member_covered_health_insurance_pct,
+              CAST(w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct AS DOUBLE) AS w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct,
+              CAST(w15_plus_with_high_141_160_mg_dl_blood_sugar_pct            AS DOUBLE) AS w15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
+              CAST(m15_plus_with_high_141_160_mg_dl_blood_sugar_pct            AS DOUBLE) AS m15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
+              CAST(women_age_30_49_years_ever_undergone_a_cervical_screen_pct  AS DOUBLE) AS women_age_30_49_years_ever_undergone_a_cervical_screen_pct,
+              CAST(women_age_30_49_years_ever_undergone_a_breast_exam_pct      AS DOUBLE) AS women_age_30_49_years_ever_undergone_a_breast_exam_pct
+            FROM nfhs_canon
+            WHERE state_canon = :p1
             """,
-            [state] + [d.lower() for d in district_names],
+            [state_canon],
         )
-        nfhs5_by_district = {r["district_name"].lower(): r for r in nfhs5_rows}
-        LOGGER.info(f"batch | DB Agent returned {len(nfhs5_rows)} NFHS-5 rows")
+        nfhs5_by_district = {r["district_canon"].upper(): r for r in nfhs5_rows}
+        LOGGER.info(f"batch | DB Agent returned {len(nfhs5_rows)} NFHS-5 rows for {state_canon}")
     except Exception as e:
-        LOGGER.warning(f"batch | DB Agent NFHS-5 query failed (tables may not be synced yet): {e}")
+        LOGGER.warning(f"batch | DB Agent NFHS-5 query failed: {e}")
         nfhs5_by_district = {}
 
     # ── Step 2: Web Agent ─────────────────────────────────────────────────────
@@ -249,7 +277,7 @@ async def run_batch_assessment(
     district_context = []
     for d in districts:
         name = d["district"]
-        nfhs5 = nfhs5_by_district.get(name.lower(), {})
+        nfhs5 = nfhs5_by_district.get(name.upper(), {})
         district_context.append({
             "district": name,
             "state": d["state"],
@@ -332,39 +360,67 @@ async def run_assessment(district: str, state: str, capability: str):
     # Yield progress so the drawer shows activity immediately
     yield sse("tool_call", {"tool": "query_database", "input": f"SELECT nfhs5 data for {district}, {state}"})
 
-    # Fetch the single district's coverage row from DB
+    # Fetch the single district's coverage row from the warehouse
+    state_canon = normalize_state(state)
+    district_canon = normalize_state(district)
+    cap_pattern = f"%{capability.lower()}%"
+
     try:
-        coverage_rows = db_query(
-            """
+        coverage_rows = wh_query(
+            f"""
+            WITH {alias_ctes()},
+            fac AS (
+              SELECT
+                CAST(f.address_zipOrPostcode AS STRING) AS pincode,
+                LOWER(
+                  COALESCE(f.specialties, '') || ' ' ||
+                  COALESCE(f.capability,  '') || ' ' ||
+                  COALESCE(f.description, '')
+                ) AS hay,
+                f.latitude, f.longitude, f.description,
+                f.numberDoctors, f.phone_numbers, f.source
+              FROM {TBL_FACILITIES} f
+              WHERE f.address_zipOrPostcode IS NOT NULL
+                AND f.address_zipOrPostcode NOT IN ('', 'null')
+            )
             SELECT
-                p.district,
-                p.statename AS state,
-                COUNT(*) AS total_facilities,
-                SUM(CASE WHEN (f.specialties || ' ' || COALESCE(f.capability,'') || ' ' || COALESCE(f.description,''))
-                    ILIKE %s THEN 1 ELSE 0 END) AS matching_facilities,
-                ROUND(AVG((
-                    CASE WHEN f.latitude IS NOT NULL THEN 1 ELSE 0 END +
-                    CASE WHEN f.longitude IS NOT NULL THEN 1 ELSE 0 END +
-                    CASE WHEN f.description IS NOT NULL AND LENGTH(f.description) > 20 THEN 1 ELSE 0 END +
-                    CASE WHEN f.numberDoctors IS NOT NULL THEN 1 ELSE 0 END +
-                    CASE WHEN f.phone_numbers IS NOT NULL THEN 1 ELSE 0 END +
-                    CASE WHEN f.source IS NOT NULL THEN 1 ELSE 0 END
-                )::float / 6)::numeric, 2) AS confidence
-            FROM public.facilities f
-            JOIN public.pincode_directory p ON f.address_zipOrPostcode = p.pincode::text
-            WHERE LOWER(p.district) = LOWER(%s)
-              AND LOWER(p.statename) = LOWER(%s)
-            GROUP BY p.district, p.statename
+              :p3 AS district, :p4 AS state,
+              CAST(COUNT(*) AS BIGINT) AS total_facilities,
+              CAST(SUM(CASE WHEN fac.hay LIKE :p1 THEN 1 ELSE 0 END) AS BIGINT) AS matching_facilities,
+              CAST(ROUND(AVG(
+                (CASE WHEN fac.latitude IS NOT NULL THEN 1 ELSE 0 END +
+                 CASE WHEN fac.longitude IS NOT NULL THEN 1 ELSE 0 END +
+                 CASE WHEN fac.description IS NOT NULL AND LENGTH(fac.description) > 20 THEN 1 ELSE 0 END +
+                 CASE WHEN fac.numberDoctors IS NOT NULL AND fac.numberDoctors NOT IN ('', 'null') THEN 1 ELSE 0 END +
+                 CASE WHEN fac.phone_numbers  IS NOT NULL AND fac.phone_numbers  NOT IN ('', 'null', '[]') THEN 1 ELSE 0 END +
+                 CASE WHEN fac.source         IS NOT NULL AND fac.source         NOT IN ('', 'null') THEN 1 ELSE 0 END
+                ) / 6.0
+              ), 2) AS DOUBLE) AS confidence
+            FROM fac
+            JOIN pin_norm p ON fac.pincode = CAST(p.pincode AS STRING)
+            WHERE p.state_canon = :p2
+              AND p.district_canon = :p5
             """,
-            [f"%{capability}%", district, state],
+            [cap_pattern, state_canon, district, state, district_canon],
         )
-        district_row = coverage_rows[0] if coverage_rows else {
-            "district": district, "state": state,
-            "total_facilities": 0, "matching_facilities": 0,
-            "gap_score": 0.0, "confidence": 0.0,
-        }
+        row = coverage_rows[0] if coverage_rows else None
+        if row and row.get("total_facilities"):
+            tot = int(row["total_facilities"])
+            mat = int(row["matching_facilities"]) if row.get("matching_facilities") else 0
+            district_row = {
+                "district": district, "state": state,
+                "total_facilities": tot, "matching_facilities": mat,
+                "gap_score": (10.0 * mat / tot) if tot else 0.0,
+                "confidence": float(row.get("confidence") or 0.0),
+            }
+        else:
+            district_row = {
+                "district": district, "state": state,
+                "total_facilities": 0, "matching_facilities": 0,
+                "gap_score": 0.0, "confidence": 0.0,
+            }
     except Exception as e:
-        LOGGER.warning(f"assessment SSE | DB query failed: {e}")
+        LOGGER.warning(f"assessment SSE | warehouse query failed: {e}")
         district_row = {
             "district": district, "state": state,
             "total_facilities": 0, "matching_facilities": 0,

@@ -1,65 +1,17 @@
-from fastapi import APIRouter, Path, Query
+import logging
+from fastapi import APIRouter, Path, Query, HTTPException
 from typing import Optional
 
+from server.warehouse import (
+    wh_query,
+    alias_ctes,
+    normalize_state,
+    normalize_district,
+    TBL_FACILITIES,
+)
+
+LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
-
-MOCK_FACILITIES = {
-    "nandurbar": [
-        {
-            "unique_id": "IN-MH-FAC-00123",
-            "name": "Govt District Hospital Nandurbar",
-            "organization_type": "Government",
-            "address_city": "Nandurbar",
-            "address_state": "Maharashtra",
-            "latitude": 21.3686, "longitude": 74.2418,
-            "number_doctors": "12", "phone_numbers": "02564-222001",
-            "specialties": "General Medicine, Maternity, Surgery",
-            "capability": "maternity, obstetric",
-            "description": "District government hospital with maternity ward",
-            "source": "NHA", "year_established": "1978",
-            "has_capability": True, "completeness": 0.83,
-            "verdict": None, "verified_capabilities": None,
-            "unverified_capabilities": None, "sources": None, "verified_at": None,
-        },
-        {
-            "unique_id": "IN-MH-FAC-00456",
-            "name": "PHC Prakasha",
-            "organization_type": "Government",
-            "address_city": "Prakasha",
-            "address_state": "Maharashtra",
-            "latitude": None, "longitude": None,
-            "number_doctors": None, "phone_numbers": None,
-            "specialties": None, "capability": None, "description": None,
-            "source": "HMIS", "year_established": None,
-            "has_capability": False, "completeness": 0.17,
-            "verdict": None, "verified_capabilities": None,
-            "unverified_capabilities": None, "sources": None, "verified_at": None,
-        },
-    ],
-}
-
-MOCK_NFHS5 = {
-    "nandurbar": {
-        "district_name": "Nandurbar", "state_ut": "Maharashtra",
-        "institutional_birth_5y_pct": 28.4,
-        "births_attended_by_skilled_hp_5y_10_pct": 38.2,
-        "mothers_who_had_at_least_4_anc_visits_lb5y_pct": 31.0,
-        "child_u5_who_are_stunted_height_for_age_18_pct": 47.2,
-        "hh_electricity_pct": 71.2,
-        "hh_improved_water_pct": 54.3,
-        "hh_use_improved_sanitation_pct": 48.1,
-        "hh_member_covered_health_insurance_pct": 22.4,
-        "non_pregnant_w15_49_who_are_anaemic": 61.3,
-        "women_age_15_49_who_are_literate_pct": 54.7,
-        "w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct": 11.2,
-        "w15_plus_with_high_141_160_mg_dl_blood_sugar_pct": 6.8,
-        "m15_plus_with_high_141_160_mg_dl_blood_sugar_pct": 8.1,
-        "w15_plus_who_use_any_kind_of_tobacco_pct": 9.3,
-        "m15_plus_who_use_any_kind_of_tobacco_pct": 38.6,
-        "women_age_30_49_years_ever_undergone_a_cervical_screen_pct": 2.1,
-        "women_age_30_49_years_ever_undergone_a_breast_exam_pct": 1.8,
-    },
-}
 
 
 @router.get("/districts/{district}/facilities")
@@ -68,9 +20,70 @@ def get_district_facilities(
     capability: str = Query(...),
     state: Optional[str] = Query(None),
 ):
-    key = district.lower()
-    facilities = MOCK_FACILITIES.get(key, [])
-    return sorted(facilities, key=lambda f: (-int(f["has_capability"]), -f["completeness"]))
+    """Per-district facility list, ordered by has_capability desc, completeness desc."""
+    if not state:
+        raise HTTPException(status_code=400, detail="state query parameter is required")
+
+    state_canon = normalize_state(state)
+    district_canon = normalize_district(district)
+    cap_pattern = f"%{capability.lower()}%"
+
+    sql = f"""
+WITH {alias_ctes()},
+fac_district AS (
+  SELECT
+    f.unique_id, f.name, f.organization_type,
+    f.address_city, f.address_stateOrRegion AS address_state,
+    f.latitude, f.longitude,
+    f.numberDoctors AS number_doctors, f.phone_numbers,
+    f.specialties, f.capability, f.description,
+    f.source, f.yearEstablished AS year_established,
+    LOWER(
+      COALESCE(f.specialties, '') || ' ' ||
+      COALESCE(f.capability,  '') || ' ' ||
+      COALESCE(f.description, '')
+    ) AS hay,
+    p.state_canon, p.district_canon
+  FROM {TBL_FACILITIES} f
+  JOIN pin_norm p
+    ON CAST(f.address_zipOrPostcode AS STRING) = CAST(p.pincode AS STRING)
+  WHERE f.address_zipOrPostcode IS NOT NULL
+    AND f.address_zipOrPostcode NOT IN ('', 'null')
+)
+SELECT
+  unique_id, name, organization_type,
+  address_city, address_state,
+  CAST(latitude  AS DOUBLE) AS latitude,
+  CAST(longitude AS DOUBLE) AS longitude,
+  number_doctors, phone_numbers,
+  specialties, capability, description,
+  source, year_established,
+  CASE WHEN hay LIKE :p1 THEN TRUE ELSE FALSE END AS has_capability,
+  CAST(
+    (CASE WHEN latitude IS NOT NULL THEN 1 ELSE 0 END +
+     CASE WHEN longitude IS NOT NULL THEN 1 ELSE 0 END +
+     CASE WHEN description IS NOT NULL AND LENGTH(description) > 20 THEN 1 ELSE 0 END +
+     CASE WHEN number_doctors IS NOT NULL AND number_doctors NOT IN ('', 'null') THEN 1 ELSE 0 END +
+     CASE WHEN phone_numbers  IS NOT NULL AND phone_numbers  NOT IN ('', 'null', '[]') THEN 1 ELSE 0 END +
+     CASE WHEN source         IS NOT NULL AND source         NOT IN ('', 'null') THEN 1 ELSE 0 END
+    ) / 6.0 AS DOUBLE
+  ) AS completeness
+FROM fac_district
+WHERE state_canon = :p2
+  AND district_canon = :p3
+ORDER BY has_capability DESC, completeness DESC
+LIMIT 200
+""".strip()
+
+    rows = wh_query(sql, [cap_pattern, state_canon, district_canon])
+    # Frontend expects verification fields too — surface as nulls until /verify is run
+    for r in rows:
+        r.setdefault("verdict", None)
+        r.setdefault("verified_capabilities", None)
+        r.setdefault("unverified_capabilities", None)
+        r.setdefault("sources", None)
+        r.setdefault("verified_at", None)
+    return rows
 
 
 @router.get("/districts/{district}/nfhs5")
@@ -78,4 +91,27 @@ def get_district_nfhs5(
     district: str = Path(...),
     state: Optional[str] = Query(None),
 ):
-    return MOCK_NFHS5.get(district.lower(), {})
+    """All NFHS-5 indicators for a district, with alias resolution."""
+    if not state:
+        raise HTTPException(status_code=400, detail="state query parameter is required")
+
+    state_canon = normalize_state(state)
+    district_canon = normalize_district(district)
+
+    sql = f"""
+WITH {alias_ctes()}
+SELECT *
+FROM nfhs_canon
+WHERE state_canon    = :p1
+  AND district_canon = :p2
+LIMIT 1
+""".strip()
+
+    rows = wh_query(sql, [state_canon, district_canon])
+    if not rows:
+        return {}
+    row = rows[0]
+    # Drop the extra normalization columns from the response payload
+    for k in ("state_norm_raw", "district_norm_raw", "state_canon", "district_canon"):
+        row.pop(k, None)
+    return row
