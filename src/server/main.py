@@ -22,6 +22,7 @@ from server.routes.scenarios import router as scenarios_router
 from server.routes.verify import router as verify_router
 from server.routes.assessment import router as assessment_router
 from server.routes.batch_assessment import router as batch_router
+from server.routes.recommendations import router as recommendations_router
 
 app = FastAPI(title="Disha API", version="1.0.0")
 
@@ -38,6 +39,7 @@ app.include_router(scenarios_router)
 app.include_router(verify_router)
 app.include_router(assessment_router)
 app.include_router(batch_router)
+app.include_router(recommendations_router)
 
 
 @app.on_event("startup")

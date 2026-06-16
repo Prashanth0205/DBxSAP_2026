@@ -2,12 +2,12 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
 from typing import AsyncIterator, Optional
 
 import httpx
 
 from server.warehouse import (
+    _get_client,
     wh_query,
     alias_ctes,
     normalize_state,
@@ -16,43 +16,34 @@ from server.warehouse import (
     TBL_PINCODE,
     TBL_NFHS5,
 )
+from server.lib.capability_keywords import build_ilike_conditions
 
 LOGGER = logging.getLogger(__name__)
 
 # Databricks Model Serving endpoint — use Claude if quota allows, else Llama 4 Maverick
 LLM_ENDPOINT = os.getenv("DATABRICKS_LLM_ENDPOINT", "databricks-llama-4-maverick")
-DATABRICKS_HOST = os.getenv("DATABRICKS_HOST", "https://dbc-744ddd5a-5ae9.cloud.databricks.com")
-DATABRICKS_PROFILE = os.getenv("DATABRICKS_CONFIG_PROFILE", "prashanth.vidhya.ravi.kumar@sap.com")
 
 MAX_ITERATIONS = 10
 _RETRY_DELAYS = [5, 10, 15]
 
-# ─────────────────────────────────────────────
-# OAuth token — fetched via Databricks CLI, cached until near-expiry
-# ─────────────────────────────────────────────
-_token_cache: dict = {"token": None, "expires_at": 0.0}
-
-
-def _get_token() -> str:
-    import time
-    now = time.time()
-    if _token_cache["token"] and now < _token_cache["expires_at"] - 60:
-        return _token_cache["token"]
-    result = subprocess.run(
-        ["databricks", "auth", "token", "--profile", DATABRICKS_PROFILE],
-        capture_output=True, text=True, check=True,
-    )
-    data = json.loads(result.stdout)
-    _token_cache["token"] = data["access_token"]
-    _token_cache["expires_at"] = now + data.get("expires_in", 3600)
-    LOGGER.debug("agent | refreshed Databricks OAuth token")
-    return _token_cache["token"]
-
 
 # ─────────────────────────────────────────────
 # LLM calls via direct HTTP to Databricks Model Serving
-# Supports OpenAI-compatible tool/function calling
+#
+# Auth + host are taken from the SDK's WorkspaceClient — same pattern as
+# warehouse.py. In a deployed Databricks App the platform injects
+# DATABRICKS_CLIENT_ID/SECRET (M2M OAuth on the app's service principal);
+# locally the SDK reads ~/.databrickscfg via the DATABRICKS_PROFILE env.
 # ─────────────────────────────────────────────
+
+def _auth_headers() -> dict:
+    """Return Authorization headers honored by both deployed and local auth."""
+    return _get_client().config.authenticate()
+
+
+def _serving_url() -> str:
+    return f"{_get_client().config.host}/serving-endpoints/{LLM_ENDPOINT}/invocations"
+
 
 def _call_llm(
     messages: list[dict],
@@ -60,30 +51,22 @@ def _call_llm(
     max_tokens: int = 4096,
     temperature: float = 0.1,
 ) -> dict:
-    token = _get_token()
-    url = f"{DATABRICKS_HOST}/serving-endpoints/{LLM_ENDPOINT}/invocations"
     payload: dict = {"messages": messages, "max_tokens": max_tokens, "temperature": temperature}
     if tools:
         payload["tools"] = tools
-    resp = httpx.post(
-        url,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=60,
-    )
-    # Token may be revoked server-side before our cached expires_at — clear cache
-    # and retry once with a fresh token before giving up.
+    url = _serving_url()
+    headers = _auth_headers()
+    headers["Content-Type"] = "application/json"
+    resp = httpx.post(url, headers=headers, json=payload, timeout=60)
+    # Token may be revoked server-side before the SDK's cached expiry — drop
+    # the cached WorkspaceClient and retry once with a fresh one.
     if resp.status_code in (401, 403):
         LOGGER.warning(f"agent | LLM auth failed [{resp.status_code}], refreshing token and retrying")
-        _token_cache["token"] = None
-        _token_cache["expires_at"] = 0.0
-        token = _get_token()
-        resp = httpx.post(
-            url,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=60,
-        )
+        from server import warehouse as _wh
+        _wh._client = None
+        headers = _auth_headers()
+        headers["Content-Type"] = "application/json"
+        resp = httpx.post(url, headers=headers, json=payload, timeout=60)
     if resp.status_code != 200:
         raise RuntimeError(f"LLM call failed [{resp.status_code}]: {resp.text[:300]}")
     return resp.json()
@@ -258,9 +241,15 @@ def _execute_tool(name: str, args: dict) -> str:
                 LOGGER.warning(f"agent | Tavily failed ({e}), trying DuckDuckGo")
 
         # Tier 2 — DuckDuckGo (free, no key required)
+        # Try gov-domain-filtered query first (mirrors Tavily's include_domains),
+        # then fall back to the unfiltered query so the LLM always has *some* evidence.
         try:
             from ddgs import DDGS
-            results = list(DDGS().text(query, max_results=5))
+            gov_query = f"{query} (site:gov.in OR site:nabh.co)"
+            results = list(DDGS().text(gov_query, max_results=5))
+            if not results:
+                LOGGER.info("agent | DuckDuckGo gov-filtered returned 0, retrying unfiltered")
+                results = list(DDGS().text(query, max_results=5))
             if results:
                 LOGGER.info(f"agent | DuckDuckGo returned {len(results)} results")
                 return json.dumps([
@@ -309,8 +298,8 @@ For each district, produce:
     "plain-English description of any contradiction between data sources or within the data itself"
   ],
   "sources": [
-    {"type": "database", "ref": "what was queried (e.g., 'NFHS-5 data', 'district data')", "detail": "specific values cited"},
-    {"type": "web", "ref": "FULL URL from the web search results (e.g., 'https://example.com/article')", "detail": "title or short description of the article"}
+    {"type": "database", "ref": "what was queried (e.g., 'NFHS-5 data', 'district data')", "detail": "specific values cited", "trust": "high | medium | low"},
+    {"type": "web", "ref": "FULL URL from the web search results (e.g., 'https://example.com/article')", "detail": "title or short description of the article", "trust": "high | medium | low"}
   ]
 }
 
@@ -342,6 +331,13 @@ Verdict rules:
 - tier2_suspect: 0 or few facilities BUT low data confidence (may be a data gap not a real desert)
 - data_hole:     insufficient data to determine — flag for investigation
 - adequate:      sufficient facilities relative to apparent need
+
+Source rules:
+- ALWAYS include at least 2 sources per district when the inputs allow (1 database + at least 1 web).
+- Pass through every web result you actually used as its own entry — do not collapse multiple URLs into one.
+- ref MUST be the full URL for web sources, the table/query name for database sources.
+- trust = "high" for *.gov.in, nabh.co, mohfw, hmis, abdm, NHP, NHA registries; "medium" for established directories (bajajfinservhealth, sehat, indiaonline, hospital chains); "low" for blogs, ad-heavy listings, unknown sources.
+- If web search returned only low-trust results, still include them — flag confidence as "low" but show the user the URLs.
 
 Output ONLY a valid JSON array — no markdown, no preamble, no trailing text."""
 
@@ -437,6 +433,13 @@ async def run_batch_assessment(
         clean = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         results: list[dict] = json.loads(clean)
         LOGGER.info(f"batch | orchestrator returned {len(results)} assessments")
+
+        # Attach the exact structured payload the LLM saw, keyed by district.
+        # This powers the "View data" drill-down in the popup so every database
+        # citation is auditable against the inputs that produced the verdict.
+        evidence_by_district = {ctx["district"]: ctx for ctx in district_context}
+        for r in results:
+            r["evidence"] = evidence_by_district.get(r.get("district"), {})
         return {r["district"]: r for r in results}
     except Exception as e:
         LOGGER.error(f"batch | orchestrator failed: {e}")
@@ -465,8 +468,8 @@ async def run_assessment(district: str, state: str, capability: str):
     yield sse("tool_call", {"tool": "query_database", "input": f"NFHS-5 data for {district}, {state}"})
 
     state_canon = normalize_state(state)
-    district_canon = normalize_state(district)
-    cap_pattern = f"%{capability.lower()}%"
+    district_canon = normalize_district(district)
+    cap_condition = build_ilike_conditions(capability, ["fac.hay"])
 
     try:
         coverage_rows = wh_query(
@@ -487,9 +490,9 @@ async def run_assessment(district: str, state: str, capability: str):
                 AND f.address_zipOrPostcode NOT IN ('', 'null')
             )
             SELECT
-              :p3 AS district, :p4 AS state,
+              :p1 AS district, :p2 AS state,
               CAST(COUNT(*) AS BIGINT) AS total_facilities,
-              CAST(SUM(CASE WHEN fac.hay LIKE :p1 THEN 1 ELSE 0 END) AS BIGINT) AS matching_facilities,
+              CAST(SUM(CASE WHEN {cap_condition} THEN 1 ELSE 0 END) AS BIGINT) AS matching_facilities,
               CAST(ROUND(AVG(
                 (CASE WHEN fac.latitude IS NOT NULL THEN 1 ELSE 0 END +
                  CASE WHEN fac.longitude IS NOT NULL THEN 1 ELSE 0 END +
@@ -501,10 +504,10 @@ async def run_assessment(district: str, state: str, capability: str):
               ), 2) AS DOUBLE) AS confidence
             FROM fac
             JOIN pin_norm p ON fac.pincode = CAST(p.pincode AS STRING)
-            WHERE p.state_canon = :p2
-              AND p.district_canon = :p5
+            WHERE p.state_canon = :p3
+              AND p.district_canon = :p4
             """,
-            [cap_pattern, state_canon, district, state, district_canon],
+            [district, state, state_canon, district_canon],
         )
         row = coverage_rows[0] if coverage_rows else None
         if row and row.get("total_facilities"):

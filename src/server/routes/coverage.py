@@ -8,6 +8,7 @@ from server.warehouse import (
     normalize_state,
     TBL_FACILITIES,
 )
+from server.lib.capability_keywords import build_ilike_conditions
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -28,12 +29,14 @@ def get_coverage(
     confidence desc.
     """
     state_canon = normalize_state(state) if state else None
-    cap_pattern = f"%{capability.lower()}%"
+    cap_condition = build_ilike_conditions(capability, ["fd.hay"])
 
     # Filter applied to the districts list (every Indian district from the
     # pincode directory), not to the facility aggregates — so districts with
     # zero facilities still appear in the response.
-    state_filter = "WHERE d.state_canon = :p2" if state_canon else ""
+    # `agg` joins districts (d) with fac_agg (fa) which both have state_canon,
+    # so the bare column is ambiguous in Spark — qualify with the d alias.
+    state_filter = "WHERE d.state_canon = :p1" if state_canon else ""
 
     sql = f"""
 WITH {alias_ctes()},
@@ -68,7 +71,7 @@ fac_agg AS (
     fd.state_canon,
     fd.district_canon,
     COUNT(*) AS total_facilities,
-    SUM(CASE WHEN fd.hay LIKE :p1 THEN 1 ELSE 0 END) AS matching_facilities,
+    SUM(CASE WHEN {cap_condition} THEN 1 ELSE 0 END) AS matching_facilities,
     ROUND(AVG(
       (CASE WHEN fd.latitude IS NOT NULL THEN 1 ELSE 0 END +
        CASE WHEN fd.longitude IS NOT NULL THEN 1 ELSE 0 END +
@@ -126,6 +129,6 @@ LEFT JOIN nfhs_canon n
 ORDER BY gap_score ASC, confidence DESC
 """.strip()
 
-    params = [cap_pattern, state_canon] if state_canon else [cap_pattern]
+    params = [state_canon] if state_canon else []
     rows = wh_query(sql, params)
     return rows

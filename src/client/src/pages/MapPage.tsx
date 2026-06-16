@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CoverageMap } from '../components/CoverageMap';
 import { DistrictPopup } from '../components/DistrictPopup';
+import { RecommendationsSidebar } from '../components/RecommendationsSidebar';
 import {
   CAPABILITY_TAGS, DistrictCoverage, CapabilityTag,
   categorizeDistrict, CATEGORY_META, DistrictCategory,
@@ -20,6 +21,7 @@ export function MapPage() {
   const [state, setState] = useState('');
   const [districts, setDistricts] = useState<DistrictCoverage[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictCoverage | null>(null);
+  const [showRecommendations, setShowRecommendations] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasQueried, setHasQueried] = useState(false);
@@ -52,7 +54,7 @@ export function MapPage() {
 
   const categorized = districts.map(d => ({ ...d, category: categorizeDistrict(d) }));
   const counts: Record<DistrictCategory, number> = {
-    no_facilities: 0, real_desert: 0, data_poor: 0, hidden_risk: 0, adequate: 0,
+    no_facilities: 0, real_desert: 0, data_poor: 0, data_gap: 0, hidden_risk: 0, adequate: 0,
   };
   categorized.forEach(d => { counts[d.category]++; });
 
@@ -60,7 +62,7 @@ export function MapPage() {
   // then by gap_score asc. no_facilities sits above data_poor so the planner
   // sees outright-zero districts before under-sampled ones.
   const categoryOrder: Record<DistrictCategory, number> = {
-    real_desert: 0, hidden_risk: 1, no_facilities: 2, data_poor: 3, adequate: 4,
+    real_desert: 0, hidden_risk: 1, no_facilities: 2, data_gap: 3, data_poor: 4, adequate: 5,
   };
   const sorted = [...categorized].sort((a, b) => {
     const co = categoryOrder[a.category] - categoryOrder[b.category];
@@ -140,6 +142,7 @@ export function MapPage() {
               Other
             </p>
             <CategoryRow category="no_facilities" count={counts.no_facilities} />
+            <CategoryRow category="data_gap"      count={counts.data_gap} />
             <CategoryRow category="data_poor"     count={counts.data_poor} />
 
             <p className="text-[10px] text-white/35 leading-snug pt-2 mt-1 border-t border-white/8">
@@ -214,12 +217,22 @@ export function MapPage() {
               <DistrictPopup
                 district={selectedDistrict}
                 capability={capability}
-                onClose={() => setSelectedDistrict(null)}
+                onClose={() => { setSelectedDistrict(null); setShowRecommendations(false); }}
+                onViewRecommendations={() => setShowRecommendations(true)}
               />
             </div>
           </div>
         )}
       </div>
+
+      {/* Recommendations sidebar — rendered outside map panel so it overlays the full screen */}
+      {selectedDistrict && showRecommendations && (
+        <RecommendationsSidebar
+          district={selectedDistrict}
+          capability={capability}
+          onClose={() => setShowRecommendations(false)}
+        />
+      )}
     </div>
   );
 }

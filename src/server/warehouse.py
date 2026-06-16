@@ -25,7 +25,11 @@ from databricks.sdk.service.sql import StatementParameterListItem, StatementStat
 LOGGER = logging.getLogger(__name__)
 
 _WAREHOUSE_ID = os.environ.get("DATABRICKS_WAREHOUSE_ID")
-_PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
+_PROFILE = (
+    os.environ.get("DATABRICKS_PROFILE")
+    or os.environ.get("DATABRICKS_CONFIG_PROFILE")
+    or "DEFAULT"
+)
 
 # Source catalog/schema for the hackathon dataset
 SOURCE_CATALOG = "databricks_virtue_foundation_dataset_dais_2026"
