@@ -14,8 +14,14 @@ interface Assessment {
   verdict_label: string;
   confidence: string;
   summary: string;
-  sources: { type: string; ref: string; detail: string }[];
+  sources: { type: string; ref: string; detail: string; trust?: string }[];
 }
+
+const TRUST_STYLE: Record<string, string> = {
+  high: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+  medium: 'bg-amber-100 text-amber-800 border-amber-300',
+  low: 'bg-gray-100 text-gray-700 border-gray-300',
+};
 
 export function DistrictPopup({ district, capability, onClose }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -181,21 +187,43 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
               <div>
                 <h4 className="text-sm font-bold text-gray-700 mb-2">🔗 SOURCES</h4>
                 <div className="space-y-2">
-                  {assessment.sources.map((source, i) => (
-                    <div key={i} className="bg-gray-50 p-2 rounded text-xs">
-                      <div className="flex items-start gap-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          source.type === 'database' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'
-                        }`}>
-                          {source.type.toUpperCase()}
-                        </span>
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900">{source.ref}</p>
-                          <p className="text-gray-600 mt-1">{source.detail}</p>
+                  {assessment.sources.map((source, i) => {
+                    const isWebUrl = source.type === 'web' && /^https?:\/\//i.test(source.ref);
+                    const trust = (source.trust || '').toLowerCase();
+                    return (
+                      <div key={i} className="bg-gray-50 p-2 rounded text-xs">
+                        <div className="flex items-start gap-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            source.type === 'database' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'
+                          }`}>
+                            {source.type.toUpperCase()}
+                          </span>
+                          {trust && (
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                              TRUST_STYLE[trust] || TRUST_STYLE.low
+                            }`}>
+                              {trust.toUpperCase()}
+                            </span>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            {isWebUrl ? (
+                              <a
+                                href={source.ref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-blue-700 hover:underline break-all"
+                              >
+                                {source.ref}
+                              </a>
+                            ) : (
+                              <p className="font-medium text-gray-900 break-all">{source.ref}</p>
+                            )}
+                            <p className="text-gray-600 mt-1">{source.detail}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
