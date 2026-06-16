@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Scenario, ScenarioDiffCity, CreateScenarioRequest, CAPABILITY_TAGS, gapColor, confidenceBadgeClass } from '../lib/types';
 import { ScenarioDiffMap } from '../components/ScenarioDiffMap';
+import { useStarred, StarredDistrict } from '../lib/starred';
 
 export function WorkspacePage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -11,6 +12,7 @@ export function WorkspacePage() {
   const [form, setForm] = useState<Partial<CreateScenarioRequest>>({
     name: '', capability: 'maternity', district: '', state: '', note: '',
   });
+  const { starred, remove, clear } = useStarred();
 
   // Scenario diff state
   const [diffA, setDiffA] = useState<number | ''>('');
@@ -84,6 +86,29 @@ export function WorkspacePage() {
         </div>
 
         {error && <p className="text-xs text-red-400">{error}</p>}
+
+        {/* Starred districts */}
+        {starred.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-white/50 uppercase tracking-widest">
+                  Starred Districts <span className="text-amber-400">★</span> {starred.length}
+                </p>
+                <p className="text-xs text-white/25 mt-0.5">Saved from the coverage map. Use these as candidates when creating a scenario.</p>
+              </div>
+              <button
+                onClick={clear}
+                className="text-[10px] text-white/30 hover:text-white/60 uppercase tracking-wide"
+              >
+                Clear all
+              </button>
+            </div>
+            <div className="space-y-2">
+              {starred.map(s => <StarredRow key={s.key} entry={s} onRemove={() => remove(s.key)} />)}
+            </div>
+          </div>
+        )}
 
         {/* New scenario form */}
         {showForm && (
@@ -240,6 +265,42 @@ function ScenarioRow({ scenario: s }: { scenario: Scenario }) {
             </span>
           )}
           <p className="text-[10px] text-white/20">{date}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StarredRow({ entry, onRemove }: { entry: StarredDistrict; onRemove: () => void }) {
+  const date = new Date(entry.starred_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return (
+    <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-4 py-3 hover:border-amber-500/40 transition-colors">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-amber-400 text-sm">★</span>
+            <p className="text-sm font-medium text-white/80">{entry.district}</p>
+            <span className="text-[10px] text-white/35">{entry.state}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-white/8 text-white/40 capitalize">{entry.capability}</span>
+          </div>
+          <p className="text-xs text-white/35 mt-1">
+            {entry.matching_facilities}/{entry.total_facilities} matching facilities
+            <span className="text-white/20"> · starred {date}</span>
+          </p>
+        </div>
+        <div className="flex-shrink-0 flex items-center gap-2">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded text-white"
+            style={{ background: gapColor(entry.gap_score) }}>
+            {entry.gap_score.toFixed(1)}
+          </span>
+          <button
+            onClick={onRemove}
+            className="text-white/30 hover:text-red-400 text-sm leading-none px-1"
+            aria-label="Remove from shortlist"
+            title="Remove from shortlist"
+          >
+            ✕
+          </button>
         </div>
       </div>
     </div>

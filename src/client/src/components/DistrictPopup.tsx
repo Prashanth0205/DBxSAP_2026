@@ -1,7 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, ReactNode } from 'react';
 import {
   DistrictCoverage, categorizeDistrict, CATEGORY_META,
 } from '../lib/types';
+import { useStarred, starKey } from '../lib/starred';
+
+function HoverTooltip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span className="relative inline-flex group">
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 bottom-full mb-1.5 -translate-x-1/2 w-56 px-2 py-1 bg-gray-900 text-white text-[10px] font-normal leading-snug rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal text-left"
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
 
 interface Props {
   district: DistrictCoverage;
@@ -62,15 +77,54 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [loadingAssessment, setLoadingAssessment] = useState(false);
+  const popupRef = useRef<HTMLDivElement | null>(null);
+  const { isStarred, toggle } = useStarred();
 
   const category = categorizeDistrict(district);
   const categoryMeta = CATEGORY_META[category];
+
+  const sk = starKey(district.state, district.district, capability);
+  const starred = isStarred(sk);
+  function toggleStar(e: React.MouseEvent) {
+    e.stopPropagation();
+    toggle({
+      key: sk,
+      district: district.district,
+      state: district.state,
+      capability,
+      gap_score: district.gap_score,
+      total_facilities: district.total_facilities,
+      matching_facilities: district.matching_facilities,
+      confidence: district.confidence,
+    });
+  }
 
   useEffect(() => {
     if (expanded && !assessment && !loadingAssessment) {
       loadAssessment();
     }
   }, [expanded]);
+
+  // Click anywhere outside the popup closes it. Mousedown so it fires before
+  // any click handlers inside the popup re-trigger the open state.
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  // Esc also closes — keyboard-friendly.
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
 
   async function loadAssessment() {
     setLoadingAssessment(true);
@@ -104,7 +158,7 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
 
   if (!expanded) {
     return (
-      <div className="relative bg-white rounded-lg shadow-2xl p-4 min-w-[280px] max-w-sm border border-gray-200">
+      <div ref={popupRef} className="relative bg-white rounded-lg shadow-2xl p-4 min-w-[280px] max-w-sm border border-gray-200">
         <button
           onClick={onClose}
           className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 text-lg leading-none w-6 h-6 flex items-center justify-center"
@@ -113,9 +167,20 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
         </button>
 
         <div className="space-y-3">
-          <div className="pr-6">
-            <h3 className="text-lg font-bold text-gray-900">{district.district}</h3>
-            <p className="text-sm text-gray-500">{district.state}</p>
+          <div className="pr-6 flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">{district.district}</h3>
+              <p className="text-sm text-gray-500">{district.state}</p>
+            </div>
+            <HoverTooltip label={starred ? 'Remove from your workspace shortlist.' : 'Save to your workspace shortlist for funding decisions.'}>
+              <button
+                onClick={toggleStar}
+                className={`text-xl leading-none cursor-pointer transition-colors ${starred ? 'text-amber-500 hover:text-amber-600' : 'text-gray-300 hover:text-amber-400'}`}
+                aria-label={starred ? 'Unstar district' : 'Star district'}
+              >
+                {starred ? '★' : '☆'}
+              </button>
+            </HoverTooltip>
           </div>
 
           <div
@@ -141,19 +206,30 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-2xl p-5 w-[450px] max-h-[600px] overflow-y-auto border border-gray-200">
+    <div ref={popupRef} className="bg-white rounded-lg shadow-2xl p-5 w-[450px] max-h-[600px] overflow-y-auto border border-gray-200">
       <div className="space-y-4">
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-xl font-bold text-gray-900">{district.district}</h3>
             <p className="text-sm text-gray-500">{district.state}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none w-6 h-6 flex items-center justify-center"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            <HoverTooltip label={starred ? 'Remove from your workspace shortlist.' : 'Save to your workspace shortlist for funding decisions.'}>
+              <button
+                onClick={toggleStar}
+                className={`text-2xl leading-none cursor-pointer transition-colors ${starred ? 'text-amber-500 hover:text-amber-600' : 'text-gray-300 hover:text-amber-400'}`}
+                aria-label={starred ? 'Unstar district' : 'Star district'}
+              >
+                {starred ? '★' : '☆'}
+              </button>
+            </HoverTooltip>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-xl leading-none w-6 h-6 flex items-center justify-center"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="border-t pt-4 space-y-3">
@@ -206,26 +282,25 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
         {assessment && (
           <div className="border-t pt-4 space-y-4">
             <div>
-              <h4 className="text-sm font-bold text-gray-700 mb-2">💡 AI ANALYSIS</h4>
+              <h4 className="text-sm font-bold text-gray-700 mb-2">AI ANALYSIS</h4>
               <p className="text-sm text-gray-700 leading-relaxed">{assessment.summary}</p>
             </div>
 
             <div>
-              <h4 className="text-sm font-bold text-gray-700 mb-2">📊 VERDICT</h4>
+              <h4 className="text-sm font-bold text-gray-700 mb-2">VERDICT</h4>
               <div className="bg-blue-50 border-l-4 border-blue-500 p-3">
                 <p className="text-sm font-semibold text-blue-900">{assessment.verdict_label}</p>
-                <p
-                  className="text-xs text-blue-700 mt-1 cursor-help"
-                  title="How sure the AI is in this verdict given the inputs. HIGH = strong DB signal + corroborating web evidence. MEDIUM = one strong source or partial corroboration. LOW = sparse data, weak sources, or conflicting signals."
-                >
-                  Confidence: {assessment.confidence} <span className="text-blue-400">(?)</span>
-                </p>
+                <HoverTooltip label="How sure the AI is in this verdict given the inputs. HIGH = strong DB signal + corroborating web evidence. MEDIUM = one strong source or partial corroboration. LOW = sparse data, weak sources, or conflicting signals.">
+                  <p className="text-xs text-blue-700 mt-1 cursor-help">
+                    Confidence: {assessment.confidence} <span className="text-blue-400">(?)</span>
+                  </p>
+                </HoverTooltip>
               </div>
             </div>
 
             {assessment.sources && assessment.sources.length > 0 && (
               <div>
-                <h4 className="text-sm font-bold text-gray-700 mb-2">🔗 SOURCES</h4>
+                <h4 className="text-sm font-bold text-gray-700 mb-2">SOURCES</h4>
                 <div className="space-y-2">
                   {assessment.sources.map((source, i) => {
                     const isWebUrl = source.type === 'web' && /^https?:\/\//i.test(source.ref);
@@ -235,23 +310,25 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
                     return (
                       <div key={i} className="bg-gray-50 p-2 rounded text-xs">
                         <div className="flex items-start gap-2">
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-help ${
-                              source.type === 'database' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'
-                            }`}
-                            title={TYPE_TOOLTIP[source.type.toLowerCase()] || ''}
-                          >
-                            {source.type.toUpperCase()}
-                          </span>
-                          {trust && (
+                          <HoverTooltip label={TYPE_TOOLTIP[source.type.toLowerCase()] || ''}>
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-help ${
-                                TRUST_STYLE[trust] || TRUST_STYLE.low
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-help ${
+                                source.type === 'database' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'
                               }`}
-                              title={TRUST_TOOLTIP[trust] || ''}
                             >
-                              {trust.toUpperCase()}
+                              {source.type.toUpperCase()}
                             </span>
+                          </HoverTooltip>
+                          {trust && (
+                            <HoverTooltip label={TRUST_TOOLTIP[trust] || ''}>
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-help ${
+                                  TRUST_STYLE[trust] || TRUST_STYLE.low
+                                }`}
+                              >
+                                {trust.toUpperCase()}
+                              </span>
+                            </HoverTooltip>
                           )}
                           <div className="flex-1 min-w-0">
                             {isWebUrl ? (
