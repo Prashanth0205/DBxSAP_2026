@@ -33,7 +33,9 @@ def get_coverage(
     # Filter applied to the districts list (every Indian district from the
     # pincode directory), not to the facility aggregates — so districts with
     # zero facilities still appear in the response.
-    state_filter = "WHERE state_canon = :p2" if state_canon else ""
+    # `agg` joins districts (d) with fac_agg (fa) which both have state_canon,
+    # so the bare column is ambiguous in Spark — qualify with the d alias.
+    state_filter = "WHERE d.state_canon = :p2" if state_canon else ""
 
     sql = f"""
 WITH {alias_ctes()},
