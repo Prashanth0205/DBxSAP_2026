@@ -43,6 +43,7 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
       eventSource.addEventListener('assessment', (e) => {
         const data = JSON.parse(e.data);
         setAssessment(data);
+        setLoadingAssessment(false);
         eventSource.close();
       });
 
