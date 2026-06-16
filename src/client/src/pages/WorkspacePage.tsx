@@ -4,6 +4,15 @@ import { ScenarioDiffMap } from '../components/ScenarioDiffMap';
 import { useStarred, StarredDistrict } from '../lib/starred';
 import { RecommendationsSidebar } from '../components/RecommendationsSidebar';
 
+const INDIA_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
+  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
+  'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Puducherry',
+];
+
 export function WorkspacePage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +33,24 @@ export function WorkspacePage() {
 
   // Recommendations state
   const [recScenario, setRecScenario] = useState<Scenario | null>(null);
+
+  // Dynamic districts list for the form dropdown
+  const [formDistricts, setFormDistricts] = useState<string[]>([]);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+
+  useEffect(() => {
+    if (!form.state || !form.capability) { setFormDistricts([]); return; }
+    setLoadingDistricts(true);
+    setForm(f => ({ ...f, district: '' }));
+    fetch(`/api/coverage?capability=${form.capability}&state=${encodeURIComponent(form.state)}`)
+      .then(r => r.json())
+      .then((rows: DistrictCoverage[]) => {
+        const sorted = [...rows].sort((a, b) => a.gap_score - b.gap_score);
+        setFormDistricts(sorted.map(r => r.district));
+      })
+      .catch(() => setFormDistricts([]))
+      .finally(() => setLoadingDistricts(false));
+  }, [form.state, form.capability]);
 
   useEffect(() => {
     fetch('/api/scenarios')
@@ -132,14 +159,21 @@ export function WorkspacePage() {
                 </select>
               </div>
               <div>
-                <FieldLabel>District</FieldLabel>
-                <input className={input} placeholder="e.g. Nandurbar" value={form.district ?? ''}
-                  onChange={e => setForm(f => ({ ...f, district: e.target.value }))} />
+                <FieldLabel>State</FieldLabel>
+                <select className={input} value={form.state ?? ''}
+                  onChange={e => setForm(f => ({ ...f, state: e.target.value, district: '' }))}>
+                  <option value="">Select state…</option>
+                  {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
               <div>
-                <FieldLabel>State</FieldLabel>
-                <input className={input} placeholder="e.g. Maharashtra" value={form.state ?? ''}
-                  onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />
+                <FieldLabel>District {loadingDistricts && <span className="text-white/25 normal-case tracking-normal font-normal ml-1">loading…</span>}</FieldLabel>
+                <select className={input} value={form.district ?? ''}
+                  onChange={e => setForm(f => ({ ...f, district: e.target.value }))}
+                  disabled={!form.state || loadingDistricts}>
+                  <option value="">{form.state ? (loadingDistricts ? 'Loading…' : 'Select district…') : 'Select state first'}</option>
+                  {formDistricts.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
               </div>
               <div>
                 <FieldLabel>Note</FieldLabel>
