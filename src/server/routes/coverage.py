@@ -1,4 +1,5 @@
 import logging
+import time
 from fastapi import APIRouter, Query
 from typing import Optional
 
@@ -12,6 +13,12 @@ from server.lib.capability_keywords import build_ilike_conditions
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
+
+# In-process cache: (capability, state_canon) → (timestamp, rows)
+# TTL of 5 minutes covers repeated UI interactions while staying fresh enough
+# for a live demo. The capability+state space is small (~250 combos max).
+_cache: dict[tuple, tuple[float, list]] = {}
+_CACHE_TTL = 300.0
 
 
 @router.get("/coverage")
@@ -29,14 +36,19 @@ def get_coverage(
     confidence desc.
     """
     state_canon = normalize_state(state) if state else None
+    cache_key = (capability.lower(), state_canon)
+
+    hit = _cache.get(cache_key)
+    if hit and time.time() - hit[0] < _CACHE_TTL:
+        LOGGER.info(f"coverage | cache hit for {cache_key}")
+        return hit[1]
+
     cap_condition = build_ilike_conditions(capability, ["fd.hay"])
 
-    # Filter applied to the districts list (every Indian district from the
-    # pincode directory), not to the facility aggregates — so districts with
-    # zero facilities still appear in the response.
-    # `agg` joins districts (d) with fac_agg (fa) which both have state_canon,
-    # so the bare column is ambiguous in Spark — qualify with the d alias.
-    state_filter = "WHERE d.state_canon = :p1" if state_canon else ""
+    # Push the state filter into fac_district so the warehouse scans only the
+    # relevant state's facilities rather than the full national table.
+    state_fac_filter = "AND p.state_canon = :p1" if state_canon else ""
+    state_dist_filter = "AND state_canon = :p1" if state_canon else ""
 
     sql = f"""
 WITH {alias_ctes()},
@@ -45,6 +57,7 @@ districts AS (
   FROM pin_norm
   WHERE state_canon IS NOT NULL AND state_canon <> ''
     AND district_canon IS NOT NULL AND district_canon <> ''
+    {state_dist_filter}
 ),
 fac AS (
   SELECT
@@ -65,6 +78,7 @@ fac_district AS (
   SELECT f.*, p.state_canon, p.district_canon
   FROM fac f
   JOIN pin_norm p ON f.pincode = CAST(p.pincode AS STRING)
+  WHERE 1=1 {state_fac_filter}
 ),
 fac_agg AS (
   SELECT
@@ -95,7 +109,6 @@ agg AS (
   LEFT JOIN fac_agg fa
     ON d.state_canon = fa.state_canon
    AND d.district_canon = fa.district_canon
-  {state_filter}
 )
 SELECT
   INITCAP(LOWER(a.district_canon)) AS district,
@@ -131,4 +144,5 @@ ORDER BY gap_score ASC, confidence DESC
 
     params = [state_canon] if state_canon else []
     rows = wh_query(sql, params)
+    _cache[cache_key] = (time.time(), rows)
     return rows
