@@ -190,6 +190,23 @@ WEB_SEARCH_TOOL = {
 ASSESSMENT_TOOLS = [QUERY_DATABASE_TOOL, WEB_SEARCH_TOOL]
 
 
+# DDG's html endpoint returns nothing for over-qualified queries. The batch
+# assessment query reads "<capability> hospital shortage desert <state> India NHA
+# HMIS registry 2024" — too specific. Strip the registry/year qualifiers and
+# leave the capability + state + India for the broader fallback attempt.
+_DROP_TERMS = (
+    "shortage", "desert", "registry", "NHA", "HMIS", "ABDM",
+    "NABH", "MoHFW", "2024", "2025",
+)
+
+
+def _simplify_web_query(query: str) -> str:
+    if not query:
+        return ""
+    tokens = [t for t in query.split() if t not in _DROP_TERMS]
+    return " ".join(tokens).strip()
+
+
 # ─────────────────────────────────────────────
 # Tool execution
 # ─────────────────────────────────────────────
@@ -241,24 +258,37 @@ def _execute_tool(name: str, args: dict) -> str:
                 LOGGER.warning(f"agent | Tavily failed ({e}), trying DuckDuckGo")
 
         # Tier 2 — DuckDuckGo (free, no key required)
-        # Try gov-domain-filtered query first (mirrors Tavily's include_domains),
-        # then fall back to the unfiltered query so the LLM always has *some* evidence.
+        # ddgs raises "No results found." as an exception (not an empty list), so
+        # each attempt needs its own try/except. We try in order of specificity:
+        #   (a) gov-filtered version of the original query
+        #   (b) the original query unfiltered
+        #   (c) a simplified fallback query — DDG html search aggressively
+        #       returns nothing for over-qualified phrases
         try:
             from ddgs import DDGS
-            gov_query = f"{query} (site:gov.in OR site:nabh.co)"
-            results = list(DDGS().text(gov_query, max_results=5))
-            if not results:
-                LOGGER.info("agent | DuckDuckGo gov-filtered returned 0, retrying unfiltered")
-                results = list(DDGS().text(query, max_results=5))
-            if results:
-                LOGGER.info(f"agent | DuckDuckGo returned {len(results)} results")
-                return json.dumps([
-                    {"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")[:300]}
-                    for r in results
-                ])
-            LOGGER.warning("agent | DuckDuckGo returned 0 results")
         except Exception as e:
-            LOGGER.warning(f"agent | DuckDuckGo failed ({e}), using empty fallback")
+            LOGGER.warning(f"agent | ddgs import failed ({e})")
+        else:
+            attempts = [
+                ("gov-filtered", f"{query} (site:gov.in OR site:nabh.co)"),
+                ("unfiltered",   query),
+                ("simplified",   _simplify_web_query(query)),
+            ]
+            for label, q in attempts:
+                if not q:
+                    continue
+                try:
+                    results = list(DDGS().text(q, max_results=5))
+                except Exception as e:
+                    LOGGER.info(f"agent | DuckDuckGo {label} failed ({e}), trying next attempt")
+                    continue
+                if results:
+                    LOGGER.info(f"agent | DuckDuckGo {label} returned {len(results)} results")
+                    return json.dumps([
+                        {"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")[:300]}
+                        for r in results
+                    ])
+                LOGGER.info(f"agent | DuckDuckGo {label} returned 0 results, trying next attempt")
 
         # Tier 3 — graceful empty result so the agent loop never crashes
         LOGGER.warning(f"agent | All web search providers failed for: {query!r}")
