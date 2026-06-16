@@ -306,6 +306,11 @@ For each district, produce:
 IMPORTANT for web sources: The "ref" field MUST be the full URL (the "url" field from the
 web search results), not the article title. Put the title in "detail" instead.
 
+CRITICAL: Do NOT include a web source if you cannot cite a real URL or a real article title
+from the web search results provided. If web search returned nothing relevant, omit web
+sources entirely from the array — do not invent placeholder citations or return empty
+{"type": "web"} entries.
+
 INCONSISTENCY DETECTION (this is critical — surface mismatches, do not hide them):
 You MUST flag any of these in the "inconsistencies" array. Use plain English a non-technical
 planner can understand. If there are no inconsistencies, return an empty array [].

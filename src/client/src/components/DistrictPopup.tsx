@@ -490,8 +490,11 @@ function SourcesSection({
                 source.detail.match(/https?:\/\/\S+/i)?.[0] ||
                 null;
               // Use whatever ISN'T the URL as the title
-              const title = urlMatch && source.ref === urlMatch ? source.detail : source.ref;
-              const subtitle = urlMatch && source.detail !== urlMatch ? source.detail : '';
+              const rawTitle = urlMatch && source.ref === urlMatch ? source.detail : source.ref;
+              const title = (rawTitle || '').trim();
+              const rawSubtitle = urlMatch && source.detail !== urlMatch ? source.detail : '';
+              const subtitle = (rawSubtitle || '').trim();
+              const hasContent = title || subtitle || urlMatch;
 
               return (
                 <div key={i} className="bg-gray-50 p-2 rounded text-xs">
@@ -513,19 +516,27 @@ function SourcesSection({
                       </HoverTooltip>
                     )}
                     <div className="flex-1 min-w-0 basis-full">
-                      <p className="font-medium text-gray-900">{title}</p>
-                      {subtitle && subtitle !== title && (
-                        <p className="text-gray-600 mt-1">{subtitle}</p>
-                      )}
-                      {urlMatch && (
-                        <a
-                          href={urlMatch}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 hover:underline break-all mt-1 inline-block"
-                        >
-                          {urlMatch}
-                        </a>
+                      {hasContent ? (
+                        <>
+                          {title && <p className="font-medium text-gray-900">{title}</p>}
+                          {subtitle && subtitle !== title && (
+                            <p className="text-gray-600 mt-1">{subtitle}</p>
+                          )}
+                          {urlMatch && (
+                            <a
+                              href={urlMatch}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 hover:underline break-all mt-1 inline-block"
+                            >
+                              {urlMatch}
+                            </a>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-gray-500 italic">
+                          Source returned by LLM with no title or URL — likely a hallucinated citation. Treat with low trust.
+                        </p>
                       )}
                     </div>
                   </div>
