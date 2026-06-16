@@ -197,65 +197,73 @@ def _execute_tool(name: str, args: dict) -> str:
             return json.dumps({"error": str(e)})
 
     if name == "web_search":
+        # All web search now goes through Perplexity sonar-pro via SAP AI Core.
+        # Used by run_verification (per-facility); the batch district flow no
+        # longer calls this — it reads pre-computed rows from district_web_intel.
         query = args.get("query", "")
-
-        # Tier 1 — Tavily (domain-filtered to gov health registries)
-        tavily_key = os.getenv("TAVILY_API_KEY", "")
-        if tavily_key:
-            try:
-                resp = httpx.post(
-                    "https://api.tavily.com/search",
-                    json={
-                        "api_key": tavily_key,
-                        "query": query,
-                        "search_depth": "basic",
-                        "max_results": 5,
-                        "include_domains": [
-                            "nhp.gov.in", "nha.gov.in", "abdm.gov.in",
-                            "mohfw.gov.in", "hmis.gov.in", "nabh.co",
-                        ],
-                    },
-                    timeout=15,
-                )
-                resp.raise_for_status()
-                results = resp.json().get("results", [])
-                if results:
-                    LOGGER.info(f"agent | Tavily returned {len(results)} results")
-                    return json.dumps([
-                        {"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("content", "")[:300]}
-                        for r in results
-                    ])
-                LOGGER.warning("agent | Tavily returned 0 results, trying DuckDuckGo")
-            except Exception as e:
-                LOGGER.warning(f"agent | Tavily failed ({e}), trying DuckDuckGo")
-
-        # Tier 2 — DuckDuckGo (free, no key required)
         try:
-            from ddgs import DDGS
-            results = list(DDGS().text(query, max_results=5))
-            if results:
-                LOGGER.info(f"agent | DuckDuckGo returned {len(results)} results")
-                return json.dumps([
-                    {"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")[:300]}
-                    for r in results
-                ])
-            LOGGER.warning("agent | DuckDuckGo returned 0 results")
+            from server.lib.sonar_client import chat_sonar
+            text, citations, _ = chat_sonar(
+                "You are a healthcare research assistant for India. "
+                "Answer concretely. Prefer government registries (NHA, NABH, "
+                "HMIS, Ayushman Bharat) and reputable Indian outlets.",
+                query,
+                temperature=0.2,
+                max_tokens=600,
+            )
+            return json.dumps([
+                {"title": "Perplexity sonar-pro", "url": url,
+                 "snippet": text[:300]} for url in (citations or [""])[:5]
+            ] or [{"title": "Perplexity sonar-pro", "url": "", "snippet": text[:600]}])
         except Exception as e:
-            LOGGER.warning(f"agent | DuckDuckGo failed ({e}), using empty fallback")
-
-        # Tier 3 — graceful empty result so the agent loop never crashes
-        LOGGER.warning(f"agent | All web search providers failed for: {query!r}")
-        return json.dumps([{
-            "title": "No web search results available",
-            "url": "",
-            "snippet": (
-                "Web search could not be completed. "
-                "Assessment will rely on database evidence only. "
-                f"Query attempted: {query}"
-            ),
-        }])
+            LOGGER.warning(f"agent | Perplexity web_search failed: {e}")
+            return json.dumps([{
+                "title": "No web search results available",
+                "url": "",
+                "snippet": (
+                    "Perplexity call failed; assessment will rely on database "
+                    f"evidence only. Query: {query}"
+                ),
+            }])
 
     return json.dumps({"error": f"Unknown tool: {name}"})
+
+
+# ─────────────────────────────────────────────
+# Pre-computed district web intel (Perplexity sonar-pro, batch-populated)
+# Source table: workspace.default.district_web_intel — see
+# src/preprocessing/perplexity_district_intel.py for the producer.
+# ─────────────────────────────────────────────
+
+INTEL_TABLE = "workspace.default.district_web_intel"
+
+
+def _fetch_district_intel(state: str, capability: str) -> dict[str, dict]:
+    """Returns {district_canon (UPPER): {text, citations}} for the (state, capability) pair."""
+    state_canon = normalize_state(state)
+    try:
+        rows = wh_query(
+            f"""
+            SELECT district_canon, search_text, citations_json
+            FROM {INTEL_TABLE}
+            WHERE state_canon = :p1 AND capability = :p2
+            """,
+            [state_canon, capability],
+        )
+    except Exception as e:
+        LOGGER.warning(f"intel | lookup failed for ({state}, {capability}): {e}")
+        return {}
+    out: dict[str, dict] = {}
+    for r in rows:
+        try:
+            citations = json.loads(r.get("citations_json") or "[]")
+        except Exception:
+            citations = []
+        out[r["district_canon"].upper()] = {
+            "text": r.get("search_text") or "",
+            "citations": citations,
+        }
+    return out
 
 
 # ─────────────────────────────────────────────
@@ -266,7 +274,9 @@ BATCH_SYSTEM_PROMPT = """You are a medical desert assessment orchestrator for In
 
 You will receive:
 - A list of districts in a state with their facility counts and NFHS-5 health indicators
-- Web search findings about the state's healthcare landscape for the capability
+- Pre-computed Perplexity web findings PER DISTRICT (search_text + citations) for the capability.
+  Each district may have its own web_intel block. Some districts may have no
+  web findings — proceed with database signal only for those.
 
 Your job is to assess EVERY district in one response and return a JSON array.
 
@@ -285,6 +295,11 @@ Verdict rules:
 - tier2_suspect: 0 or few facilities BUT low data confidence (may be a data gap not a real desert)
 - data_hole:     insufficient data to determine — flag for investigation
 - adequate:      sufficient facilities relative to apparent need
+
+For each district, your `sources` array MUST include:
+  - one entry of {"type": "database", "ref": "facilities + NFHS-5", "detail": "<key numbers cited>"}
+  - one entry per cited web URL: {"type": "web", "ref": "<url verbatim from web_intel.citations>", "detail": "<one-phrase what this URL supports>"}
+Copy URLs verbatim from the district's web_intel.citations — do not invent, summarize, or shorten them. Include up to 5 of the most relevant citation URLs.
 
 Output ONLY a valid JSON array — no markdown, no preamble, no trailing text."""
 
@@ -330,20 +345,27 @@ async def run_batch_assessment(
         LOGGER.warning(f"batch | DB NFHS-5 query failed: {e}")
         nfhs5_by_district = {}
 
-    # ── Step 2: Web — ONE search for the whole state ──────────────────────────
-    web_query_str = f"{capability} hospital shortage desert {state} India NHA HMIS registry 2024"
-    web_results_str = _execute_tool("web_search", {"query": web_query_str})
-    try:
-        web_results = json.loads(web_results_str)
-    except Exception:
-        web_results = []
-    LOGGER.info(f"batch | web search returned {len(web_results)} results")
+    # ── Step 2: Web intel — pre-computed Perplexity rows per district ────────
+    intel_by_district = _fetch_district_intel(state, capability)
+    matched = sum(1 for d in districts if d["district"].upper() in intel_by_district)
+    if matched == 0:
+        LOGGER.warning(
+            f"batch | NO pre-computed Perplexity intel for ({state}, {capability}). "
+            f"Run src/preprocessing/perplexity_district_intel.py to populate "
+            f"{INTEL_TABLE}. Proceeding with DB-only assessment."
+        )
+    else:
+        LOGGER.info(
+            f"batch | Perplexity intel hit {matched}/{len(districts)} districts "
+            f"for ({state}, {capability})"
+        )
 
     # ── Step 3: Orchestrator LLM — all districts in one prompt ───────────────
     district_context = []
     for d in districts:
         name = d["district"]
         nfhs5 = nfhs5_by_district.get(name.upper(), {})
+        intel = intel_by_district.get(name.upper(), {})
         district_context.append({
             "district": name,
             "state": d.get("state", state),
@@ -360,15 +382,18 @@ async def run_batch_assessment(
                 "health_insurance_pct": nfhs5.get("hh_member_covered_health_insurance_pct"),
                 "blood_sugar_women_pct": nfhs5.get("w15_plus_with_high_141_160_mg_dl_blood_sugar_pct"),
             },
+            "web_intel": {
+                "text": intel.get("text", ""),
+                "citations": intel.get("citations", []),
+            },
         })
 
     messages = [
         {"role": "system", "content": BATCH_SYSTEM_PROMPT},
         {"role": "user", "content": (
             f"Capability: {capability}\nState: {state}\n\n"
-            f"District data ({len(district_context)} districts):\n"
+            f"District data with per-district web intel ({len(district_context)} districts):\n"
             f"{json.dumps(district_context, indent=2)}\n\n"
-            f"Web search findings:\n{json.dumps(web_results, indent=2)}\n\n"
             f"Assess every district and return the JSON array."
         )},
     ]
