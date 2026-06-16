@@ -8,6 +8,7 @@ from server.warehouse import (
     normalize_state,
     normalize_district,
     TBL_FACILITIES,
+    TBL_PINCODE,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -30,11 +31,26 @@ def get_district_facilities(
 
     sql = f"""
 WITH {alias_ctes()},
+-- Average post office lat/lng per district pincode as a reliable district-level coordinate
+po_coords AS (
+  SELECT
+    CAST(p.pincode AS STRING) AS pincode,
+    AVG(TRY_CAST(pd.latitude  AS DOUBLE)) AS po_lat,
+    AVG(TRY_CAST(pd.longitude AS DOUBLE)) AS po_lng
+  FROM pin_norm p
+  JOIN {TBL_PINCODE} pd ON CAST(pd.pincode AS STRING) = CAST(p.pincode AS STRING)
+  WHERE pd.latitude  IS NOT NULL AND CAST(pd.latitude  AS STRING) NOT IN ('', 'null', '0.0', '0')
+    AND pd.longitude IS NOT NULL AND CAST(pd.longitude AS STRING) NOT IN ('', 'null', '0.0', '0')
+  GROUP BY CAST(p.pincode AS STRING)
+),
 fac_district AS (
   SELECT
     f.unique_id, f.name, f.organization_type,
     f.address_city, f.address_stateOrRegion AS address_state,
-    f.latitude, f.longitude,
+    -- Use post office centroid as map position — always correctly pinned to the district.
+    -- Facility GPS from the source dataset has geocoding errors (wrong district).
+    poc.po_lat  AS latitude,
+    poc.po_lng  AS longitude,
     f.numberDoctors AS number_doctors, f.phone_numbers,
     f.specialties, f.capability, f.description,
     f.source, f.yearEstablished AS year_established,
@@ -47,6 +63,8 @@ fac_district AS (
   FROM {TBL_FACILITIES} f
   JOIN pin_norm p
     ON CAST(f.address_zipOrPostcode AS STRING) = CAST(p.pincode AS STRING)
+  LEFT JOIN po_coords poc
+    ON poc.pincode = CAST(f.address_zipOrPostcode AS STRING)
   WHERE f.address_zipOrPostcode IS NOT NULL
     AND f.address_zipOrPostcode NOT IN ('', 'null')
 )
