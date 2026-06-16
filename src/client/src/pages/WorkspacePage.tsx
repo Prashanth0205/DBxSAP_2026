@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Scenario, ScenarioDiffCity, CreateScenarioRequest, CAPABILITY_TAGS, gapColor, confidenceBadgeClass } from '../lib/types';
+import { Scenario, ScenarioDiffCity, CreateScenarioRequest, CAPABILITY_TAGS, gapColor, confidenceBadgeClass, DistrictCoverage } from '../lib/types';
 import { ScenarioDiffMap } from '../components/ScenarioDiffMap';
 import { useStarred, StarredDistrict } from '../lib/starred';
+import { RecommendationsSidebar } from '../components/RecommendationsSidebar';
 
 export function WorkspacePage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -20,6 +21,9 @@ export function WorkspacePage() {
   const [diffCities, setDiffCities] = useState<ScenarioDiffCity[]>([]);
   const [diffLoading, setDiffLoading] = useState(false);
   const [hasCompared, setHasCompared] = useState(false);
+
+  // Recommendations state
+  const [recScenario, setRecScenario] = useState<Scenario | null>(null);
 
   useEffect(() => {
     fetch('/api/scenarios')
@@ -170,7 +174,13 @@ export function WorkspacePage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {scenarios.map(s => <ScenarioRow key={s.id} scenario={s} />)}
+            {scenarios.map(s => (
+              <ScenarioRow
+                key={s.id}
+                scenario={s}
+                onViewRecommendations={s.district && s.state ? () => setRecScenario(s) : undefined}
+              />
+            ))}
           </div>
         )}
 
@@ -233,11 +243,33 @@ export function WorkspacePage() {
           </div>
         )}
       </div>
+
+      {/* Recommendations sidebar — triggered from a scenario row */}
+      {recScenario && recScenario.district && recScenario.state && (
+        <RecommendationsSidebar
+          district={{
+            district: recScenario.district,
+            state: recScenario.state,
+            capability: recScenario.capability,
+            gap_score: recScenario.gap_score ?? 0,
+            confidence: recScenario.confidence ?? 0,
+            total_facilities: 0,
+            matching_facilities: 0,
+            institutional_birth_5y_pct: null,
+            child_stunting_pct: null,
+            hh_electricity_pct: null,
+            hh_improved_water_pct: null,
+            hh_use_improved_sanitation_pct: null,
+          } as DistrictCoverage}
+          capability={recScenario.capability}
+          onClose={() => setRecScenario(null)}
+        />
+      )}
     </div>
   );
 }
 
-function ScenarioRow({ scenario: s }: { scenario: Scenario }) {
+function ScenarioRow({ scenario: s, onViewRecommendations }: { scenario: Scenario; onViewRecommendations?: () => void }) {
   const date = new Date(s.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   return (
     <div className="bg-white/4 border border-white/8 rounded-lg px-4 py-3.5 hover:border-white/15 transition-colors">
@@ -251,6 +283,14 @@ function ScenarioRow({ scenario: s }: { scenario: Scenario }) {
             <p className="text-xs text-white/35 mt-0.5">{[s.district, s.state].filter(Boolean).join(', ')}</p>
           )}
           {s.note && <p className="text-xs text-white/30 mt-1 italic">{s.note}</p>}
+          {onViewRecommendations && (
+            <button
+              onClick={onViewRecommendations}
+              className="mt-2 text-[11px] font-medium text-[#e07340] hover:text-[#c9632f] transition-colors"
+            >
+              View Recommendations →
+            </button>
+          )}
         </div>
         <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
           {s.gap_score != null && (
