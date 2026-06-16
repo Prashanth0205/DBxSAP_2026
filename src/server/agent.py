@@ -285,9 +285,28 @@ For each district, produce:
 
 Verdict rules:
 - tier1_desert:  0 matching facilities AND poor health outcomes AND high data confidence
-- tier2_suspect: 0 or few facilities BUT low data confidence (may be a data gap not a real desert)
+                 AND no contradicting signals (see contradiction rule below)
+- tier2_suspect: 0 or few facilities BUT either low data confidence OR contradicting signals
+                 (e.g. high institutional_birth_pct suggests women reach care despite 0 matching
+                 facilities — the registry may be incomplete, not the supply)
 - data_hole:     insufficient data to determine — flag for investigation
 - adequate:      sufficient facilities relative to apparent need
+
+Contradiction rule — IMPORTANT:
+If matching_facilities is 0 but institutional_birth_pct >= 80 OR skilled_birth_attendance_pct >= 80,
+this is a STRONG contradiction: women are demonstrably reaching maternity care, so the facility
+registry is likely incomplete rather than the district being a true desert.
+In this case you MUST use tier2_suspect (not tier1_desert) and your summary MUST call out the
+contradiction explicitly — e.g. "Registry shows 0 matching facilities but 94% institutional
+births suggests facilities exist and are unregistered."
+
+Poor health outcome signals (for maternity):
+- institutional_birth_pct < 70  — women not reaching care
+- anc_4plus_visits_pct < 50     — inadequate antenatal coverage
+- child_stunting_pct > 40       — severe child malnutrition as proxy for broader care gap
+
+High institutional_birth_pct (>= 80) or skilled_birth_attendance_pct (>= 80) is a
+POSITIVE signal that actively weakens a desert verdict, regardless of stunting.
 
 Source rules:
 - ALWAYS include at least 2 sources per district when the inputs allow (1 database + at least 1 web).
