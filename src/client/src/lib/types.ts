@@ -185,13 +185,14 @@ export function confidenceBadgeClass(c: number): string {
 //   real_desert   — sparse facilities AND poor health outcomes
 //   data_poor     — sparse facilities BUT adequate health outcomes
 //                   (under-sampled, not under-served)
+//   data_gap      — sparse facilities AND no NFHS-5 health data to confirm/deny
 //   hidden_risk   — adequate facility count BUT poor health outcomes
 //                   (capability mismatch, low-trust evidence)
 //   adequate      — adequate facilities AND adequate health outcomes
 // ---------------------------------------------------------------------------
 
 export type DistrictCategory =
-  | 'no_facilities' | 'real_desert' | 'data_poor' | 'hidden_risk' | 'adequate';
+  | 'no_facilities' | 'real_desert' | 'data_poor' | 'data_gap' | 'hidden_risk' | 'adequate';
 
 export const CATEGORY_META: Record<DistrictCategory, {
   label: string;
@@ -216,6 +217,12 @@ export const CATEGORY_META: Record<DistrictCategory, {
     shortLabel: 'Data Poor',
     color: '#6b7280',
     description: 'Sparse facility coverage but adequate health outcomes (under-sampled, not under-served)',
+  },
+  data_gap: {
+    label: 'Insufficient Data',
+    shortLabel: 'Data Gap',
+    color: '#94a3b8',
+    description: 'Sparse facility coverage with no NFHS-5 health data — cannot confirm or rule out a desert',
   },
   hidden_risk: {
     label: 'Hidden Risk',
@@ -251,16 +258,15 @@ export function categorizeDistrict(d: DistrictCoverage): DistrictCategory {
 
   const hasHealthData = instBirth != null || stunting != null;
 
-  // If we have NFHS-5 data, use it; otherwise fall back to coverage signal
-  let poorHealth: boolean;
-  if (hasHealthData) {
-    const lowInstBirth = instBirth != null && instBirth < 70;
-    const highStunting = stunting != null && stunting > 35;
-    poorHealth = lowInstBirth || highStunting;
-  } else {
-    // No NFHS-5 data — can't distinguish data-poor from real desert
-    poorHealth = sparseCoverage;
+  // If we have NFHS-5 data, use it; otherwise we can't classify health outcomes
+  if (!hasHealthData) {
+    return sparseCoverage ? 'data_gap' : 'adequate';
   }
+
+  let poorHealth: boolean;
+  const lowInstBirth = instBirth != null && instBirth < 70;
+  const highStunting = stunting != null && stunting > 35;
+  poorHealth = lowInstBirth || highStunting;
 
   if (sparseCoverage && poorHealth) return 'real_desert';
   if (sparseCoverage && !poorHealth) return 'data_poor';
