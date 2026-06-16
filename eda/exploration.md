@@ -2,6 +2,7 @@
 
 > Source: Delta Sharing catalog `databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset` (read-only)
 > Captured: 2026-06-15
+> Pass 2 (capability keyword validation, 5-category classifier distribution, facility↔outcome correlations, data-quality outliers): [`exploration_pass2.md`](exploration_pass2.md)
 
 We are consuming all three tables via Delta Sharing at runtime. Findings, summaries, and small derived aggregates live here in the repo. The full tables are not exported to CSV — `facilities` has very long free-text fields and `india_post_pincode_directory` is 166K rows.
 

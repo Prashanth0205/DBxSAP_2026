@@ -1,0 +1,8 @@
+capability,narrow_match,expanded_match,multiplier
+maternity,781,4730,6.06
+dialysis,620,2540,4.10
+trauma,1517,4415,2.91
+nicu,590,866,1.47
+icu,1973,2514,1.27
+emergency,3828,4256,1.11
+oncology,2333,2562,1.10

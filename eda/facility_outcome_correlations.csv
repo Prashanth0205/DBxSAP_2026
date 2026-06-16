@@ -1,0 +1,6 @@
+capability,corr_total_facilities_with_inst_birth,corr_total_facilities_with_stunting,corr_capability_match_with_inst_birth,corr_capability_match_with_stunting
+maternity,0.186,-0.130,0.192,-0.139
+icu,0.186,-0.130,0.187,-0.129
+nicu,0.186,-0.130,0.153,-0.122
+oncology,0.186,-0.130,0.179,-0.123
+emergency,0.186,-0.130,0.194,-0.143
