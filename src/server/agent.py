@@ -11,6 +11,7 @@ from server.warehouse import (
     wh_query,
     alias_ctes,
     normalize_state,
+    normalize_district,
     TBL_FACILITIES,
     TBL_PINCODE,
     TBL_NFHS5,
@@ -70,6 +71,19 @@ def _call_llm(
         json=payload,
         timeout=60,
     )
+    # Token may be revoked server-side before our cached expires_at — clear cache
+    # and retry once with a fresh token before giving up.
+    if resp.status_code in (401, 403):
+        LOGGER.warning(f"agent | LLM auth failed [{resp.status_code}], refreshing token and retrying")
+        _token_cache["token"] = None
+        _token_cache["expires_at"] = 0.0
+        token = _get_token()
+        resp = httpx.post(
+            url,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=60,
+        )
     if resp.status_code != 200:
         raise RuntimeError(f"LLM call failed [{resp.status_code}]: {resp.text[:300]}")
     return resp.json()
@@ -315,8 +329,8 @@ async def run_batch_assessment(
               CAST(hh_improved_water_pct AS DOUBLE) AS hh_improved_water_pct,
               CAST(hh_member_covered_health_insurance_pct AS DOUBLE) AS hh_member_covered_health_insurance_pct,
               CAST(w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct AS DOUBLE) AS w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct,
-              CAST(w15_plus_with_high_141_160_mg_dl_blood_sugar_pct AS DOUBLE) AS w15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
-              CAST(m15_plus_with_high_141_160_mg_dl_blood_sugar_pct AS DOUBLE) AS m15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
+              CAST(w15_plus_with_high_or_very_high_gt_140_mg_dl_blood_sugar_or_pct AS DOUBLE) AS w15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
+              CAST(m15_plus_with_high_or_very_high_gt_140_mg_dl_blood_sugar_or_pct AS DOUBLE) AS m15_plus_with_high_141_160_mg_dl_blood_sugar_pct,
               CAST(women_age_30_49_years_ever_undergone_a_cervical_screen_pct AS DOUBLE) AS women_age_30_49_years_ever_undergone_a_cervical_screen_pct,
               CAST(women_age_30_49_years_ever_undergone_a_breast_exam_pct AS DOUBLE) AS women_age_30_49_years_ever_undergone_a_breast_exam_pct
             FROM nfhs_canon
@@ -343,7 +357,8 @@ async def run_batch_assessment(
     district_context = []
     for d in districts:
         name = d["district"]
-        nfhs5 = nfhs5_by_district.get(name.upper(), {})
+        # Use the same normalization as the NFHS-5 dict keys (district_canon)
+        nfhs5 = nfhs5_by_district.get(normalize_district(name), {})
         district_context.append({
             "district": name,
             "state": d.get("state", state),

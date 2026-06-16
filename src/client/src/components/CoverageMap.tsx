@@ -87,6 +87,13 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
   const map = useMap();
   const layerRef = useRef<L.GeoJSON | null>(null);
 
+  // Keep the latest onDistrictClick in a ref so the layer doesn't rebuild
+  // when the parent re-renders with a new function reference.
+  const clickHandlerRef = useRef(onDistrictClick);
+  useEffect(() => {
+    clickHandlerRef.current = onDistrictClick;
+  }, [onDistrictClick]);
+
   useEffect(() => {
     if (layerRef.current) {
       layerRef.current.remove();
@@ -149,7 +156,7 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
               );
 
               featureLayer.on({
-                click: () => onDistrictClick(row.district, row.state),
+                click: () => clickHandlerRef.current(row.district, row.state),
                 mouseover: e => {
                   (e.target as L.Path).setStyle({
                     fillOpacity: isSparse ? 1 : 0.95,
@@ -200,7 +207,7 @@ function ChoroplethLayer({ districts, onDistrictClick }: Props) {
       layerRef.current?.remove();
       layerRef.current = null;
     };
-  }, [districts, map, onDistrictClick]);
+  }, [districts, map]);
 
   return null;
 }
