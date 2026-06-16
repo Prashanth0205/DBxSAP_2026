@@ -56,14 +56,17 @@ export function RecommendationsSidebar({ district, capability, onClose }: Props)
 
   return (
     <>
-      {/* Backdrop — clicking it closes the sidebar */}
+      {/* Backdrop — visual only; close via the X button. */}
       <div
-        className="fixed inset-0 bg-black/30 z-[9998]"
-        onClick={onClose}
+        data-recommendations-sidebar
+        className="fixed inset-0 bg-black/30 z-[9998] pointer-events-none"
       />
 
       {/* Slide-in sidebar from the right */}
-      <div className="fixed top-0 right-0 h-full w-[420px] bg-white shadow-2xl z-[9999] flex flex-col">
+      <div
+        data-recommendations-sidebar
+        className="fixed top-0 right-0 h-full w-[420px] bg-white shadow-2xl z-[9999] flex flex-col"
+      >
 
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-gray-100">
