@@ -70,6 +70,19 @@ def _call_llm(
         json=payload,
         timeout=60,
     )
+    # Token may be revoked server-side before our cached expires_at — clear cache
+    # and retry once with a fresh token before giving up.
+    if resp.status_code in (401, 403):
+        LOGGER.warning(f"agent | LLM auth failed [{resp.status_code}], refreshing token and retrying")
+        _token_cache["token"] = None
+        _token_cache["expires_at"] = 0.0
+        token = _get_token()
+        resp = httpx.post(
+            url,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=60,
+        )
     if resp.status_code != 200:
         raise RuntimeError(f"LLM call failed [{resp.status_code}]: {resp.text[:300]}")
     return resp.json()
