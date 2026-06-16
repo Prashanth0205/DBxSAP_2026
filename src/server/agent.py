@@ -2,12 +2,12 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
 from typing import AsyncIterator, Optional
 
 import httpx
 
 from server.warehouse import (
+    _get_client,
     wh_query,
     alias_ctes,
     normalize_state,
@@ -21,38 +21,28 @@ LOGGER = logging.getLogger(__name__)
 
 # Databricks Model Serving endpoint — use Claude if quota allows, else Llama 4 Maverick
 LLM_ENDPOINT = os.getenv("DATABRICKS_LLM_ENDPOINT", "databricks-llama-4-maverick")
-DATABRICKS_HOST = os.getenv("DATABRICKS_HOST", "https://dbc-744ddd5a-5ae9.cloud.databricks.com")
-DATABRICKS_PROFILE = os.getenv("DATABRICKS_CONFIG_PROFILE", "prashanth.vidhya.ravi.kumar@sap.com")
 
 MAX_ITERATIONS = 10
 _RETRY_DELAYS = [5, 10, 15]
 
-# ─────────────────────────────────────────────
-# OAuth token — fetched via Databricks CLI, cached until near-expiry
-# ─────────────────────────────────────────────
-_token_cache: dict = {"token": None, "expires_at": 0.0}
-
-
-def _get_token() -> str:
-    import time
-    now = time.time()
-    if _token_cache["token"] and now < _token_cache["expires_at"] - 60:
-        return _token_cache["token"]
-    result = subprocess.run(
-        ["databricks", "auth", "token", "--profile", DATABRICKS_PROFILE],
-        capture_output=True, text=True, check=True,
-    )
-    data = json.loads(result.stdout)
-    _token_cache["token"] = data["access_token"]
-    _token_cache["expires_at"] = now + data.get("expires_in", 3600)
-    LOGGER.debug("agent | refreshed Databricks OAuth token")
-    return _token_cache["token"]
-
 
 # ─────────────────────────────────────────────
 # LLM calls via direct HTTP to Databricks Model Serving
-# Supports OpenAI-compatible tool/function calling
+#
+# Auth + host are taken from the SDK's WorkspaceClient — same pattern as
+# warehouse.py. In a deployed Databricks App the platform injects
+# DATABRICKS_CLIENT_ID/SECRET (M2M OAuth on the app's service principal);
+# locally the SDK reads ~/.databrickscfg via the DATABRICKS_PROFILE env.
 # ─────────────────────────────────────────────
+
+def _auth_headers() -> dict:
+    """Return Authorization headers honored by both deployed and local auth."""
+    return _get_client().config.authenticate()
+
+
+def _serving_url() -> str:
+    return f"{_get_client().config.host}/serving-endpoints/{LLM_ENDPOINT}/invocations"
+
 
 def _call_llm(
     messages: list[dict],
@@ -60,30 +50,22 @@ def _call_llm(
     max_tokens: int = 4096,
     temperature: float = 0.1,
 ) -> dict:
-    token = _get_token()
-    url = f"{DATABRICKS_HOST}/serving-endpoints/{LLM_ENDPOINT}/invocations"
     payload: dict = {"messages": messages, "max_tokens": max_tokens, "temperature": temperature}
     if tools:
         payload["tools"] = tools
-    resp = httpx.post(
-        url,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=60,
-    )
-    # Token may be revoked server-side before our cached expires_at — clear cache
-    # and retry once with a fresh token before giving up.
+    url = _serving_url()
+    headers = _auth_headers()
+    headers["Content-Type"] = "application/json"
+    resp = httpx.post(url, headers=headers, json=payload, timeout=60)
+    # Token may be revoked server-side before the SDK's cached expiry — drop
+    # the cached WorkspaceClient and retry once with a fresh one.
     if resp.status_code in (401, 403):
         LOGGER.warning(f"agent | LLM auth failed [{resp.status_code}], refreshing token and retrying")
-        _token_cache["token"] = None
-        _token_cache["expires_at"] = 0.0
-        token = _get_token()
-        resp = httpx.post(
-            url,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=60,
-        )
+        from server import warehouse as _wh
+        _wh._client = None
+        headers = _auth_headers()
+        headers["Content-Type"] = "application/json"
+        resp = httpx.post(url, headers=headers, json=payload, timeout=60)
     if resp.status_code != 200:
         raise RuntimeError(f"LLM call failed [{resp.status_code}]: {resp.text[:300]}")
     return resp.json()
