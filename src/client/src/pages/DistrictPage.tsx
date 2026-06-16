@@ -4,7 +4,11 @@ import {
   Facility, Nfhs5, AssessmentEvent, AssessmentVerdict,
   DistrictCoverage, VERDICT_META, confidenceBadgeClass,
 } from '../lib/types';
-import { FacilityDotMap, CapabilityRadar, DataQualityBreakdown } from '../components/DistrictVisualizations';
+import {
+  FacilityDotMap, CapabilityRadar, DataQualityBreakdown,
+  DistrictContext, DistrictRankBadge, PopulationProxy,
+  NearbyComparison, ConfidenceBreakdown,
+} from '../components/DistrictVisualizations';
 
 export function DistrictPage() {
   const { district } = useParams<{ district: string }>();
@@ -15,13 +19,14 @@ export function DistrictPage() {
 
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [nfhs5, setNfhs5] = useState<Nfhs5 | null>(null);
+  const [context, setContext] = useState<DistrictContext | null>(null);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [events, setEvents] = useState<AssessmentEvent[]>([]);
   const [assessment, setAssessment] = useState<AssessmentEvent | null>(null);
   const [assessing, setAssessing] = useState(false);
-  const [vizTab, setVizTab] = useState<'map' | 'radar' | 'quality'>('map');
+  const [vizTab, setVizTab] = useState<'map' | 'radar' | 'quality' | 'population' | 'nearby' | 'confidence'>('map');
 
   useEffect(() => {
     if (!district) return;
@@ -31,10 +36,12 @@ export function DistrictPage() {
     Promise.all([
       fetch(`/api/districts/${encodeURIComponent(district)}/facilities?${qp}`).then(r => r.json()),
       fetch(`/api/districts/${encodeURIComponent(district)}/nfhs5?${state ? `state=${encodeURIComponent(state)}` : ''}`).then(r => r.json()),
+      fetch(`/api/districts/${encodeURIComponent(district)}/context?${qp}`).then(r => r.json()),
     ])
-      .then(([facs, nfhs]) => {
+      .then(([facs, nfhs, ctx]) => {
         setFacilities(facs);
         setNfhs5(Object.keys(nfhs).length > 0 ? nfhs : null);
+        setContext(ctx?.error ? null : ctx);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoadingFacilities(false));
@@ -82,10 +89,13 @@ export function DistrictPage() {
             </svg>
             Back
           </button>
-          <div>
-            <span className="text-white font-semibold">{district}</span>
-            <span className="text-white/40 text-sm ml-2">{state}</span>
-            <span className="ml-2 text-xs px-2 py-0.5 rounded bg-white/8 text-white/50 capitalize">{capability}</span>
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-white font-semibold">{district}</span>
+              <span className="text-white/40 text-sm">{state}</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-white/8 text-white/50 capitalize">{capability}</span>
+            </div>
+            {context && <DistrictRankBadge ctx={context} />}
           </div>
         </div>
         {verdictMeta && (
@@ -121,18 +131,25 @@ export function DistrictPage() {
           {!loadingFacilities && (
             <div className="flex-shrink-0 border-b border-white/8">
               {/* Tab bar */}
-              <div className="flex border-b border-white/6">
-                {(['map', 'radar', 'quality'] as const).map(tab => (
+              <div className="flex border-b border-white/6 overflow-x-auto">
+                {([
+                  ['map',        '📍 Facility Map'],
+                  ['radar',      '🕸 Capabilities'],
+                  ['population', '👥 Population'],
+                  ['nearby',     '🗺 Compare'],
+                  ['confidence', '🔍 Confidence'],
+                  ['quality',    '📊 Data Quality'],
+                ] as const).map(([tab, label]) => (
                   <button
                     key={tab}
                     onClick={() => setVizTab(tab)}
-                    className={`px-4 py-2.5 text-[11px] font-medium capitalize transition-colors border-b-2 -mb-px ${
+                    className={`px-3 py-2.5 text-[11px] font-medium whitespace-nowrap transition-colors border-b-2 -mb-px shrink-0 ${
                       vizTab === tab
                         ? 'border-[#e07340] text-[#e07340]'
                         : 'border-transparent text-white/35 hover:text-white/60'
                     }`}
                   >
-                    {tab === 'map' ? '📍 Facility Map' : tab === 'radar' ? '🕸 Capability Profile' : '📊 Data Quality'}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -140,20 +157,27 @@ export function DistrictPage() {
               {/* Tab content */}
               <div className="p-4" style={{ height: 280 }}>
                 {vizTab === 'map' && (
-                  <FacilityDotMap
-                    facilities={facilities}
-                    district={district!}
-                    state={state}
-                  />
+                  <FacilityDotMap facilities={facilities} district={district!} state={state} />
                 )}
                 {vizTab === 'radar' && (
-                  <CapabilityRadar
-                    facilities={facilities}
-                    currentCapability={capability}
-                  />
+                  <CapabilityRadar facilities={facilities} currentCapability={capability} />
+                )}
+                {vizTab === 'population' && context && (
+                  <PopulationProxy ctx={context} />
+                )}
+                {vizTab === 'nearby' && context && (
+                  <NearbyComparison ctx={context} />
+                )}
+                {vizTab === 'confidence' && context && (
+                  <ConfidenceBreakdown ctx={context} />
                 )}
                 {vizTab === 'quality' && (
                   <DataQualityBreakdown facilities={facilities} />
+                )}
+                {(vizTab === 'population' || vizTab === 'nearby' || vizTab === 'confidence') && !context && (
+                  <div className="flex items-center justify-center h-full text-white/25 text-xs">
+                    Loading context data…
+                  </div>
                 )}
               </div>
             </div>

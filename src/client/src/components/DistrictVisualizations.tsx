@@ -299,3 +299,258 @@ export function DataQualityBreakdown({ facilities }: DataQualityProps) {
     </div>
   );
 }
+
+// ─── Types for context API ─────────────────────────────────────────────────
+
+export interface DistrictContext {
+  district: string;
+  state: string;
+  capability: string;
+  rank_in_state: number | null;
+  total_districts_in_state: number;
+  pincode_count: number;
+  gap_score: number;
+  nearby_districts: {
+    district: string;
+    gap_score: number;
+    confidence: number;
+    matching_facilities: number;
+    total_facilities: number;
+    rank_in_state: number;
+  }[];
+  confidence_breakdown: {
+    total_facilities: number;
+    fields: { label: string; count: number; total: number }[];
+  };
+}
+
+// ─── 4. District Rank Badge ────────────────────────────────────────────────
+
+export function DistrictRankBadge({ ctx }: { ctx: DistrictContext }) {
+  const { rank_in_state, total_districts_in_state, gap_score, capability, state } = ctx;
+  if (!rank_in_state) return null;
+
+  const isTop3 = rank_in_state <= 3;
+  const isTop10 = rank_in_state <= 10;
+  const color = isTop3 ? '#dc2626' : isTop10 ? '#f97316' : '#e07340';
+
+  const ordinal = (n: number) => {
+    const s = ['th','st','nd','rd'];
+    const v = n % 100;
+    return n + (s[(v-20)%10] || s[v] || s[0]);
+  };
+
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold"
+      style={{ borderColor: color + '50', background: color + '15', color }}
+    >
+      <span>{ordinal(rank_in_state)} worst</span>
+      <span className="text-white/30 font-normal">of {total_districts_in_state} districts</span>
+      <span className="text-white/30 font-normal">·</span>
+      <span className="text-white/50 font-normal capitalize">{state} · {capability}</span>
+    </div>
+  );
+}
+
+// ─── 5. Population Proxy Card ──────────────────────────────────────────────
+
+export function PopulationProxy({ ctx }: { ctx: DistrictContext }) {
+  const { pincode_count, gap_score, rank_in_state, total_districts_in_state } = ctx;
+
+  // Rough population estimate: median Indian post office serves ~8,000–12,000 people
+  const estimatedMin = Math.round(pincode_count * 8000 / 1000) * 1000;
+  const estimatedMax = Math.round(pincode_count * 12000 / 1000) * 1000;
+
+  const fmt = (n: number) =>
+    n >= 1_000_000
+      ? `${(n / 1_000_000).toFixed(1)}M`
+      : `${(n / 1_000).toFixed(0)}K`;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="text-[11px] text-white/40 uppercase tracking-wider">Estimated Population Impact</span>
+
+      <div className="grid grid-cols-3 gap-3">
+        {/* Population estimate */}
+        <div className="bg-white/5 rounded-lg p-3 col-span-1">
+          <p className="text-[10px] text-white/35 mb-1">Est. Population</p>
+          <p className="text-xl font-bold text-white">{fmt(estimatedMin)}–{fmt(estimatedMax)}</p>
+          <p className="text-[10px] text-white/25 mt-1">based on {pincode_count} post offices</p>
+        </div>
+
+        {/* Matching facilities per population */}
+        <div className="bg-white/5 rounded-lg p-3 col-span-1">
+          <p className="text-[10px] text-white/35 mb-1">Gap Score</p>
+          <p
+            className="text-xl font-bold"
+            style={{ color: gap_score <= 1 ? '#dc2626' : gap_score <= 3 ? '#f97316' : '#16a34a' }}
+          >
+            {gap_score.toFixed(1)}<span className="text-sm text-white/30">/10</span>
+          </p>
+          <p className="text-[10px] text-white/25 mt-1">
+            {gap_score === 0 ? 'No matching facilities' : gap_score < 3 ? 'Critical shortage' : 'Moderate coverage'}
+          </p>
+        </div>
+
+        {/* State rank */}
+        <div className="bg-white/5 rounded-lg p-3 col-span-1">
+          <p className="text-[10px] text-white/35 mb-1">State Rank</p>
+          <p className="text-xl font-bold text-white">
+            #{rank_in_state ?? '—'}
+            <span className="text-sm text-white/30">/{total_districts_in_state}</span>
+          </p>
+          <p className="text-[10px] text-white/25 mt-1">worst-first ranking</p>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-white/20">
+        Population estimate: avg. post office serves 8K–12K residents (India Post data)
+      </p>
+    </div>
+  );
+}
+
+// ─── 6. Nearby District Comparison ────────────────────────────────────────
+
+export function NearbyComparison({ ctx }: { ctx: DistrictContext }) {
+  const { nearby_districts, district, gap_score } = ctx;
+
+  if (nearby_districts.length === 0) {
+    return (
+      <div className="text-white/25 text-xs text-center py-6">
+        No nearby district data available
+      </div>
+    );
+  }
+
+  const allDistricts = [
+    { district, gap_score, isCurrent: true },
+    ...nearby_districts.map(d => ({ ...d, isCurrent: false })),
+  ].sort((a, b) => a.gap_score - b.gap_score);
+
+  const maxGap = Math.max(...allDistricts.map(d => d.gap_score), 1);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-white/40 uppercase tracking-wider">Compare Nearby Districts</span>
+        <span className="text-[10px] text-white/25">by gap score · lower = worse</span>
+      </div>
+
+      <div className="space-y-2">
+        {allDistricts.map(d => {
+          const barPct = maxGap > 0 ? (d.gap_score / maxGap) * 100 : 0;
+          const barColor = d.gap_score <= 1 ? '#dc2626' : d.gap_score <= 3 ? '#f97316' : d.gap_score <= 6 ? '#eab308' : '#16a34a';
+
+          return (
+            <div key={d.district} className={`flex items-center gap-3 ${d.isCurrent ? 'opacity-100' : 'opacity-70'}`}>
+              <div className="flex items-center gap-1.5 w-28 shrink-0">
+                {d.isCurrent && (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#e07340] shrink-0" />
+                )}
+                <span
+                  className={`text-[11px] truncate ${d.isCurrent ? 'text-white font-semibold' : 'text-white/50'}`}
+                >
+                  {d.district}
+                </span>
+              </div>
+              <div className="flex-1 h-4 bg-white/8 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.max(barPct, 4)}%`,
+                    background: d.isCurrent ? barColor : barColor + '99',
+                    outline: d.isCurrent ? `1.5px solid ${barColor}` : 'none',
+                  }}
+                />
+              </div>
+              <span
+                className="text-[11px] font-semibold w-10 text-right shrink-0"
+                style={{ color: barColor }}
+              >
+                {d.gap_score.toFixed(1)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-[10px] text-white/20">
+        Showing {district} vs {nearby_districts.length} closest-scoring districts
+      </p>
+    </div>
+  );
+}
+
+// ─── 7. Confidence Breakdown ───────────────────────────────────────────────
+
+export function ConfidenceBreakdown({ ctx }: { ctx: DistrictContext }) {
+  const { confidence_breakdown } = ctx;
+  const total = confidence_breakdown.total_facilities;
+
+  if (total === 0) {
+    return (
+      <div className="text-white/25 text-xs text-center py-6">No facility data</div>
+    );
+  }
+
+  // Overall confidence = average of field fill rates
+  const avgFillRate = confidence_breakdown.fields.length > 0
+    ? confidence_breakdown.fields.reduce((sum, f) => sum + (f.count / Math.max(f.total, 1)), 0) / confidence_breakdown.fields.length
+    : 0;
+
+  const confColor = avgFillRate >= 0.7 ? '#16a34a' : avgFillRate >= 0.4 ? '#e07340' : '#dc2626';
+  const confLabel = avgFillRate >= 0.7 ? 'High confidence' : avgFillRate >= 0.4 ? 'Moderate confidence' : 'Low confidence';
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-white/40 uppercase tracking-wider">Why this confidence score?</span>
+        <span className="text-[11px] font-semibold" style={{ color: confColor }}>
+          {confLabel} · {Math.round(avgFillRate * 100)}%
+        </span>
+      </div>
+
+      {/* Overall confidence gauge */}
+      <div className="h-2 bg-white/8 rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${Math.round(avgFillRate * 100)}%`, background: confColor }}
+        />
+      </div>
+
+      {/* Field-by-field breakdown */}
+      <div className="space-y-2 mt-1">
+        {confidence_breakdown.fields.map(f => {
+          const pct = Math.round((f.count / Math.max(f.total, 1)) * 100);
+          const missing = f.total - f.count;
+          const fieldColor = pct >= 70 ? '#16a34a' : pct >= 40 ? '#e07340' : '#dc2626';
+
+          return (
+            <div key={f.label} className="flex items-center gap-2">
+              <span className="text-[11px] text-white/45 w-24 shrink-0">{f.label}</span>
+              <div className="flex-1 h-3 bg-white/8 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${pct}%`, background: fieldColor }}
+                />
+              </div>
+              <span className="text-[10px] w-20 text-right shrink-0" style={{ color: fieldColor }}>
+                {f.count}/{f.total}
+                {missing > 0 && (
+                  <span className="text-white/25 ml-1">({missing} missing)</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-[10px] text-white/20">
+        Confidence = average data completeness across {total} facilities.
+        Low confidence means gaps may be data holes, not real deserts.
+      </p>
+    </div>
+  );
+}
