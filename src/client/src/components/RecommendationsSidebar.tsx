@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DistrictCoverage } from '../lib/types';
 
 interface Recommendation {
@@ -39,35 +39,68 @@ const IMPACT_COLOR: Record<string, string> = {
 
 export function RecommendationsSidebar({ district, capability, onClose }: Props) {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
+    setRecommendations([]);
+    setDone(false);
+    setError(null);
+
     const qp = new URLSearchParams({ capability, state: district.state });
-    fetch(`/api/districts/${encodeURIComponent(district.district)}/recommendations?${qp}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) throw new Error(data.error);
-        setRecommendations(data.recommendations ?? []);
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+    const url = `/api/districts/${encodeURIComponent(district.district)}/recommendations?${qp}`;
+    const es = new EventSource(url);
+    esRef.current = es;
+
+    es.addEventListener('card', (e) => {
+      try {
+        const card: Recommendation = JSON.parse(e.data);
+        setRecommendations(prev => [...prev, card]);
+      } catch { /* skip malformed card */ }
+    });
+
+    es.addEventListener('done', () => {
+      setDone(true);
+      es.close();
+    });
+
+    es.addEventListener('error', (e) => {
+      try {
+        const { message } = JSON.parse((e as MessageEvent).data ?? '{}');
+        setError(message ?? 'Something went wrong.');
+      } catch {
+        setError('Could not generate recommendations — try again.');
+      }
+      setDone(true);
+      es.close();
+    });
+
+    // Fallback: if the connection drops without a done event
+    es.onerror = () => {
+      if (!done) setDone(true);
+      es.close();
+    };
+
+    return () => { es.close(); };
   }, [district.district, district.state, capability]);
+
+  const loading = !done && recommendations.length === 0 && !error;
+  const streaming = !done && recommendations.length > 0;
 
   return (
     <>
-      {/* Backdrop — visual only; close via the X button. */}
+      {/* Backdrop */}
       <div
         data-recommendations-sidebar
         className="fixed inset-0 bg-black/30 z-[9998] pointer-events-none"
       />
 
-      {/* Slide-in sidebar from the right */}
+      {/* Slide-in sidebar */}
       <div
         data-recommendations-sidebar
         className="fixed top-0 right-0 h-full w-[420px] bg-white shadow-2xl z-[9999] flex flex-col"
       >
-
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-gray-100">
           <div>
@@ -103,27 +136,32 @@ export function RecommendationsSidebar({ district, capability, onClose }: Props)
             </div>
           )}
 
-          {!loading && !error && recommendations.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-10">No recommendations generated.</p>
-          )}
-
-          {!loading && recommendations.length > 0 && (
+          {recommendations.length > 0 && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-400">
-                {recommendations.length} recommendations · sorted by priority
-              </p>
+              {!done && (
+                <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                  <svg className="animate-spin h-3 w-3 text-[#e07340]" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                  Generating…
+                </p>
+              )}
+              {done && !error && (
+                <p className="text-xs text-gray-400">
+                  {recommendations.length} recommendations · sorted by priority
+                </p>
+              )}
 
               {recommendations.map((rec, i) => {
                 const meta = TYPE_META[rec.type] ?? TYPE_META.data_action;
                 return (
                   <div
                     key={i}
-                    className={`rounded-xl border bg-white p-4 shadow-sm ${meta.border}`}
+                    className={`rounded-xl border bg-white p-4 shadow-sm ${meta.border} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                   >
-                    {/* Priority + type header */}
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-bold text-gray-400">#{rec.priority}</span>
-                      <span className="text-sm">{meta.icon && meta.icon}</span>
                       <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${meta.badge}`}>
                         {meta.label}
                       </span>
@@ -134,13 +172,9 @@ export function RecommendationsSidebar({ district, capability, onClose }: Props)
                       )}
                     </div>
 
-                    {/* Title */}
                     <h3 className="text-sm font-semibold text-gray-900 mb-1.5">{rec.title}</h3>
-
-                    {/* Detail */}
                     <p className="text-xs text-gray-600 leading-relaxed mb-3">{rec.detail}</p>
 
-                    {/* Effort / Impact badges */}
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-gray-400">Effort:</span>
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${EFFORT_COLOR[rec.effort]}`}>
@@ -154,7 +188,21 @@ export function RecommendationsSidebar({ district, capability, onClose }: Props)
                   </div>
                 );
               })}
+
+              {/* Skeleton for next card while streaming */}
+              {streaming && (
+                <div className="rounded-xl border border-gray-100 p-4 animate-pulse">
+                  <div className="h-3 bg-gray-100 rounded w-1/3 mb-3"/>
+                  <div className="h-3 bg-gray-100 rounded w-2/3 mb-2"/>
+                  <div className="h-3 bg-gray-100 rounded w-full mb-2"/>
+                  <div className="h-3 bg-gray-100 rounded w-4/5"/>
+                </div>
+              )}
             </div>
+          )}
+
+          {done && !error && recommendations.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-10">No recommendations generated.</p>
           )}
         </div>
 

@@ -120,6 +120,49 @@ def _extract_content(response: dict) -> str:
     return choices[0].get("message", {}).get("content") or "" if choices else ""
 
 
+def stream_llm_tokens(
+    messages: list[dict],
+    max_tokens: int = 2048,
+    temperature: float = 0.1,
+):
+    """
+    Generator that yields raw token strings from the LLM using streaming mode.
+    Uses httpx streaming to read server-sent events from the model serving endpoint.
+    """
+    payload = {
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": True,
+    }
+    url = _serving_url()
+    headers = _auth_headers()
+    headers["Content-Type"] = "application/json"
+
+    with httpx.stream("POST", url, headers=headers, json=payload, timeout=60) as resp:
+        if resp.status_code in (401, 403):
+            from server import warehouse as _wh
+            _wh._client = None
+            headers = _auth_headers()
+            headers["Content-Type"] = "application/json"
+        if resp.status_code != 200:
+            resp.read()
+            raise RuntimeError(f"LLM stream failed [{resp.status_code}]: {resp.text[:300]}")
+        for line in resp.iter_lines():
+            if not line.startswith("data: "):
+                continue
+            data = line[6:]
+            if data.strip() == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data)
+                token = chunk["choices"][0].get("delta", {}).get("content") or ""
+                if token:
+                    yield token
+            except Exception:
+                continue
+
+
 def _extract_tool_calls(response: dict) -> list[dict]:
     choices = response.get("choices", [])
     return choices[0].get("message", {}).get("tool_calls") or [] if choices else []
