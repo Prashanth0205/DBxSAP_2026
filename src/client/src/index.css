@@ -42,6 +42,15 @@ body {
   opacity: 0.35;
 }
 
+/* Evidence keyword highlighting */
+mark {
+  background: rgba(224, 115, 64, 0.3);
+  color: #fbbf24;
+  border-radius: 2px;
+  padding: 0 2px;
+  font-style: normal;
+}
+
 /* Scrollbar — dark */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

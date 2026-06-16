@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
+import { Link } from 'react-router';
 import {
   DistrictCoverage, categorizeDistrict, CATEGORY_META,
 } from '../lib/types';
@@ -85,6 +86,7 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
 
   const sk = starKey(district.state, district.district, capability);
   const starred = isStarred(sk);
+  const evidenceHref = `/district/${encodeURIComponent(district.district)}?capability=${encodeURIComponent(capability)}&state=${encodeURIComponent(district.state)}`;
   function toggleStar(e: React.MouseEvent) {
     e.stopPropagation();
     toggle({
@@ -200,6 +202,13 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
           >
             See Details ▼
           </button>
+
+          <Link
+            to={evidenceHref}
+            className="block w-full py-2 text-sm font-medium text-center text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors border border-amber-200"
+          >
+            View facility evidence →
+          </Link>
         </div>
       </div>
     );
@@ -395,9 +404,16 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
           </div>
         )}
 
+        <Link
+          to={evidenceHref}
+          className="block w-full py-2 text-sm font-medium text-center text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors mt-4 border border-amber-200"
+        >
+          View facility evidence →
+        </Link>
+
         <button
           onClick={() => setExpanded(false)}
-          className="w-full py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors mt-4 border border-gray-200"
+          className="w-full py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors mt-2 border border-gray-200"
         >
           Collapse ▲
         </button>

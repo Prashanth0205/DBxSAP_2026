@@ -4,6 +4,7 @@ import {
   Facility, Nfhs5, AssessmentEvent, AssessmentVerdict,
   VERDICT_META, confidenceBadgeClass,
 } from '../lib/types';
+import { highlightKeywords } from '../lib/capabilityKeywords';
 
 export function DistrictPage() {
   const { district } = useParams<{ district: string }>();
@@ -123,7 +124,7 @@ export function DistrictPage() {
             ) : facilities.length === 0 ? (
               <p className="text-white/25 text-sm text-center py-10">No facilities found.</p>
             ) : (
-              facilities.map(f => <FacilityCard key={f.unique_id} facility={f} />)
+              facilities.map(f => <FacilityCard key={f.unique_id} facility={f} capability={capability} />)
             )}
           </div>
         </div>
@@ -138,9 +139,9 @@ export function DistrictPage() {
   );
 }
 
-function FacilityCard({ facility: f }: { facility: Facility }) {
+function FacilityCard({ facility: f, capability }: { facility: Facility; capability: string }) {
   const [expanded, setExpanded] = useState(false);
-  const hasDetail = !!(f.description || f.specialties || f.number_doctors || f.phone_numbers);
+  const hasDetail = !!(f.description || f.specialties || f.capability || f.number_doctors || f.phone_numbers);
 
   return (
     <div className={`rounded-lg border p-3.5 transition-colors ${
@@ -183,8 +184,9 @@ function FacilityCard({ facility: f }: { facility: Facility }) {
 
       {expanded && (
         <div className="mt-2.5 pt-2.5 border-t border-white/8 space-y-1.5 text-xs text-white/50">
-          {f.specialties    && <p><span className="text-white/30">Specialties:</span> {f.specialties}</p>}
-          {f.description    && <p><span className="text-white/30">Description:</span> {f.description}</p>}
+          {f.capability     && <p><span className="text-white/30">Capability:</span> {highlightKeywords(f.capability, capability)}</p>}
+          {f.specialties    && <p><span className="text-white/30">Specialties:</span> {highlightKeywords(f.specialties, capability)}</p>}
+          {f.description    && <p><span className="text-white/30">Description:</span> {highlightKeywords(f.description, capability)}</p>}
           {f.number_doctors && <p><span className="text-white/30">Doctors:</span> {f.number_doctors}</p>}
           {f.phone_numbers  && <p><span className="text-white/30">Phone:</span> {f.phone_numbers}</p>}
           {f.sources?.map((s, i) => (
