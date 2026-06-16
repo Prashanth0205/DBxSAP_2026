@@ -111,9 +111,23 @@ async def _call_with_retry(
         try:
             return await _call_llm_async(messages, tools, max_tokens, temperature)
         except Exception as e:
-            if ("429" not in str(e) and "rate" not in str(e).lower()) or delay is None:
+            err = str(e).lower()
+            # Retry on rate-limits AND transient network errors (DNS failures,
+            # connection resets, timeouts). The DNS error 'nodename nor servname
+            # provided' surfaces as 'nodename' or 'name resolution' in the message.
+            is_retryable = (
+                "429" in str(e)
+                or "rate" in err
+                or "nodename" in err
+                or "name resolution" in err
+                or "connection" in err
+                or "timeout" in err
+                or "timed out" in err
+                or "temporarily unavailable" in err
+            )
+            if not is_retryable or delay is None:
                 raise
-            LOGGER.warning(f"agent | rate limited, retrying in {delay}s (attempt {attempt + 1})")
+            LOGGER.warning(f"agent | transient error ({type(e).__name__}: {e}), retrying in {delay}s (attempt {attempt + 1})")
             await asyncio.sleep(delay)
     raise RuntimeError("unreachable")
 
@@ -291,8 +305,37 @@ For each district, produce:
   "verdict_label": "human-readable label",
   "confidence": "high | medium | low",
   "summary": "2 sentences max, cite specific numbers",
-  "sources": [{"type": "database | web", "ref": "...", "detail": "..."}]
+  "inconsistencies": [
+    "plain-English description of any contradiction between data sources or within the data itself"
+  ],
+  "sources": [
+    {"type": "database", "ref": "what was queried (e.g., 'NFHS-5 data', 'district data')", "detail": "specific values cited"},
+    {"type": "web", "ref": "FULL URL from the web search results (e.g., 'https://example.com/article')", "detail": "title or short description of the article"}
+  ]
 }
+
+IMPORTANT for web sources: The "ref" field MUST be the full URL (the "url" field from the
+web search results), not the article title. Put the title in "detail" instead.
+
+INCONSISTENCY DETECTION (this is critical — surface mismatches, do not hide them):
+You MUST flag any of these in the "inconsistencies" array. Use plain English a non-technical
+planner can understand. If there are no inconsistencies, return an empty array [].
+
+Internal data mismatches (within database):
+- Zero matching facilities BUT high institutional birth % (e.g. "Database lists 0 maternity
+  facilities, but 94.7% of births happen in a facility — facilities likely exist but aren't
+  tagged with the maternity capability in the dataset")
+- Zero matching facilities BUT high skilled-birth-attendance %
+- Adequate matching facility count BUT very poor health outcomes (capability mismatch — facilities
+  may exist but lack equipment/staff to actually deliver the capability)
+- Total facility count is zero but NFHS-5 health indicators exist (people are getting care
+  somewhere — the dataset is missing records)
+
+Web vs database mismatches:
+- Web search names a specific hospital/clinic in the district, but database shows 0 matching
+  facilities (likely missing records)
+- Web search reports a recent closure or shortage, but database still shows facilities present
+- Web search confirms a known gap, and database agrees — no inconsistency, but worth noting in summary
 
 Verdict rules:
 - tier1_desert:  0 matching facilities AND poor health outcomes AND high data confidence
@@ -404,6 +447,7 @@ async def run_batch_assessment(
                 "verdict_label": "Assessment Unavailable",
                 "confidence": "low",
                 "summary": f"AI assessment failed for {d['district']}. Review raw data manually.",
+                "inconsistencies": [],
                 "sources": [],
             }
             for d in districts
@@ -496,7 +540,8 @@ async def run_assessment(district: str, state: str, capability: str):
     results = await run_batch_assessment(state=state, capability=capability, districts=[district_row])
     district_result = results.get(district, {
         "verdict": "data_hole", "verdict_label": "No Assessment",
-        "confidence": "low", "summary": "Assessment could not be completed.", "sources": [],
+        "confidence": "low", "summary": "Assessment could not be completed.",
+        "inconsistencies": [], "sources": [],
     })
 
     yield sse("tool_result", {"tool": "web_search", "rows": 1, "preview": "web search complete"})

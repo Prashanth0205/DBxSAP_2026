@@ -271,25 +271,32 @@ export function CoverageMap({ districts, onDistrictClick }: Props) {
 }
 
 function MapLegend() {
-  const categories: DistrictCategory[] = [
-    'real_desert', 'hidden_risk', 'data_poor', 'no_facilities', 'adequate',
-  ];
+  const primary: DistrictCategory[] = ['adequate', 'hidden_risk', 'real_desert'];
+  const other: DistrictCategory[] = ['no_facilities', 'data_poor'];
+
+  const renderRow = (cat: DistrictCategory) => {
+    const meta = CATEGORY_META[cat];
+    return (
+      <div key={cat} className="flex items-start gap-2">
+        <span className="w-3 h-3 rounded-sm flex-shrink-0 mt-0.5" style={{ background: meta.color }} />
+        <div className="text-white/60 leading-tight">
+          <p className="font-medium">{meta.label}</p>
+          <p className="text-[10px] text-white/35 mt-0.5">{meta.description}</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="absolute bottom-5 right-4 z-[9999] bg-[#1a1d23]/90 backdrop-blur rounded-lg px-3 py-2.5 text-xs border border-white/10 max-w-[260px]">
       <p className="font-semibold mb-2 text-white/50 uppercase tracking-widest text-[10px]">Categories</p>
       <div className="space-y-1.5">
-        {categories.map(cat => {
-          const meta = CATEGORY_META[cat];
-          return (
-            <div key={cat} className="flex items-start gap-2">
-              <span className="w-3 h-3 rounded-sm flex-shrink-0 mt-0.5" style={{ background: meta.color }} />
-              <div className="text-white/60 leading-tight">
-                <p className="font-medium">{meta.label}</p>
-                <p className="text-[10px] text-white/35 mt-0.5">{meta.description}</p>
-              </div>
-            </div>
-          );
-        })}
+        {primary.map(renderRow)}
+
+        <p className="font-semibold pt-2 mt-1 border-t border-white/10 text-white/50 uppercase tracking-widest text-[10px]">
+          Other
+        </p>
+        {other.map(renderRow)}
 
         <div className="flex items-center gap-2 pt-1.5 mt-1 border-t border-white/10">
           <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: '#1e2433' }} />

@@ -132,11 +132,15 @@ export function MapPage() {
             <p className="text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-1.5">
               Categories
             </p>
-            <CategoryRow category="real_desert"   count={counts.real_desert} />
+            <CategoryRow category="adequate"      count={counts.adequate} />
             <CategoryRow category="hidden_risk"   count={counts.hidden_risk} />
+            <CategoryRow category="real_desert"   count={counts.real_desert} />
+
+            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-1.5 pt-2 mt-1 border-t border-white/8">
+              Other
+            </p>
             <CategoryRow category="no_facilities" count={counts.no_facilities} />
             <CategoryRow category="data_poor"     count={counts.data_poor} />
-            <CategoryRow category="adequate"      count={counts.adequate} />
 
             <p className="text-[10px] text-white/35 leading-snug pt-2 mt-1 border-t border-white/8">
               Coverage based on <span className="text-white/55 font-semibold">{totalFacilities.toLocaleString()}</span> facility records
