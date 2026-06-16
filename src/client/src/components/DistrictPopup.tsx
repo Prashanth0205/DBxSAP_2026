@@ -7,12 +7,38 @@ import {
 import { useStarred, starKey } from '../lib/starred';
 
 function HoverTooltip({ label, children }: { label: string; children: ReactNode }) {
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLSpanElement>(null);
+
+  function handleMouseEnter() {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const TOOLTIP_WIDTH = 224; // w-56 = 224px
+    const PADDING = 8;
+    const triggerCenterX = rect.left + rect.width / 2;
+
+    // Clamp horizontal position so tooltip stays in viewport
+    let left = triggerCenterX - TOOLTIP_WIDTH / 2;
+    left = Math.max(PADDING, Math.min(left, window.innerWidth - TOOLTIP_WIDTH - PADDING));
+
+    setTooltipStyle({
+      left: `${left}px`,
+      top: `${rect.top - PADDING}px`,
+      transform: 'translateY(-100%)',
+    });
+  }
+
   return (
-    <span className="relative inline-flex group">
+    <span
+      ref={triggerRef}
+      className="relative inline-flex group"
+      onMouseEnter={handleMouseEnter}
+    >
       {children}
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 bottom-full mb-1.5 -translate-x-1/2 w-56 px-2 py-1 bg-gray-900 text-white text-[10px] font-normal leading-snug rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal text-left"
+        style={tooltipStyle}
+        className="pointer-events-none fixed w-56 px-2 py-1 bg-gray-900 text-white text-[10px] font-normal leading-snug rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-[10001] whitespace-normal text-left"
       >
         {label}
       </span>
