@@ -26,7 +26,9 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Iterable
 
 # `server` lives at src/server. When run as `python -m src.preprocessing...`
@@ -139,7 +141,25 @@ def _insert(state_canon: str, district_canon: str, capability: str,
     )
 
 
-def run(state: str | None, capabilities: Iterable[str], skip_existing: bool = True) -> None:
+def _fetch_one(state_canon: str, district_canon: str, capability: str) -> tuple[str, str, str, str | None, int, float]:
+    """Worker: returns (state, district, capability, error_or_None, char_count, seconds)."""
+    user_prompt = _build_user_prompt(state_canon, district_canon, capability)
+    t0 = time.time()
+    try:
+        text, citations, _ = chat_sonar(
+            SONAR_SYSTEM_PROMPT,
+            user_prompt,
+            temperature=0.2,
+            max_tokens=600,
+        )
+        _insert(state_canon, district_canon, capability, text, citations)
+        return state_canon, district_canon, capability, None, len(text), time.time() - t0
+    except Exception as e:
+        return state_canon, district_canon, capability, str(e), 0, time.time() - t0
+
+
+def run(state: str | None, capabilities: Iterable[str], skip_existing: bool = True,
+        max_workers: int = 6) -> None:
     _ensure_table()
     districts = _districts_for_state(state)
     LOGGER.info(f"resolved {len(districts)} districts (state filter: {state or 'ALL'})")
@@ -147,45 +167,52 @@ def run(state: str | None, capabilities: Iterable[str], skip_existing: bool = Tr
     caps = list(capabilities)
     LOGGER.info(f"capabilities: {caps}")
 
-    existing = _existing_keys(state, caps[0] if len(caps) == 1 else None) if skip_existing else set()
+    # When running multi-capability jobs, fetch existing keys across ALL caps so
+    # resumed runs don't redo work. Single-cap runs scope by cap for a faster lookup.
+    existing = (
+        _existing_keys(state, caps[0] if len(caps) == 1 else None)
+        if skip_existing else set()
+    )
     LOGGER.info(f"already-fetched rows: {len(existing)}")
 
-    total = len(districts) * len(caps)
-    done = 0
+    work: list[tuple[str, str, str]] = []
     skipped = 0
-    failed = 0
-
     for capability in caps:
         for state_canon, district_canon in districts:
-            done += 1
             key = (state_canon, district_canon, capability)
             if key in existing:
                 skipped += 1
                 continue
+            work.append((state_canon, district_canon, capability))
 
-            user_prompt = _build_user_prompt(state_canon, district_canon, capability)
-            try:
-                t0 = time.time()
-                text, citations, _ = chat_sonar(
-                    SONAR_SYSTEM_PROMPT,
-                    user_prompt,
-                    temperature=0.2,
-                    max_tokens=600,
-                )
-                dt = time.time() - t0
-                _insert(state_canon, district_canon, capability, text, citations)
+    total = len(work)
+    LOGGER.info(f"queued: {total} tasks, {skipped} skipped (already cached), workers={max_workers}")
+
+    done = 0
+    failed = 0
+    counter_lock = threading.Lock()
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = [ex.submit(_fetch_one, s, d, c) for s, d, c in work]
+        for fut in as_completed(futures):
+            state_canon, district_canon, capability, err, n_chars, dt = fut.result()
+            with counter_lock:
+                done += 1
+                idx = done
+            if err is None:
                 LOGGER.info(
-                    f"[{done}/{total}] {state_canon} | {district_canon} | "
-                    f"{capability} → {len(text)}c, {len(citations)} cites, {dt:.1f}s"
+                    f"[{idx}/{total}] {state_canon} | {district_canon} | "
+                    f"{capability} → {n_chars}c, {dt:.1f}s"
                 )
-            except Exception as e:
-                failed += 1
+            else:
+                with counter_lock:
+                    failed += 1
                 LOGGER.error(
-                    f"[{done}/{total}] FAIL {state_canon} | {district_canon} | "
-                    f"{capability}: {e}"
+                    f"[{idx}/{total}] FAIL {state_canon} | {district_canon} | "
+                    f"{capability}: {err}"
                 )
 
-    LOGGER.info(f"done: {done} processed, {skipped} skipped (already cached), {failed} failed")
+    LOGGER.info(f"done: {total} processed, {skipped} skipped (already cached), {failed} failed")
 
 
 def main() -> int:
@@ -200,6 +227,8 @@ def main() -> int:
     p.add_argument("--all", action="store_true", help="All states × all capabilities.")
     p.add_argument("--no-skip", action="store_true",
                    help="Re-fetch even rows that already exist.")
+    p.add_argument("--workers", type=int, default=6,
+                   help="Parallel Perplexity calls (default 6).")
     args = p.parse_args()
 
     if args.all:
@@ -213,7 +242,8 @@ def main() -> int:
         state = args.state
         caps = [args.capability]
 
-    run(state=state, capabilities=caps, skip_existing=not args.no_skip)
+    run(state=state, capabilities=caps, skip_existing=not args.no_skip,
+        max_workers=args.workers)
     return 0
 
 
