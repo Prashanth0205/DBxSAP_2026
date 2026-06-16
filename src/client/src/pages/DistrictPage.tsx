@@ -4,7 +4,7 @@ import {
   Facility, Nfhs5, AssessmentEvent, AssessmentVerdict,
   DistrictCoverage, VERDICT_META, confidenceBadgeClass,
 } from '../lib/types';
-import { DistrictChartsStrip } from '../components/DistrictCharts';
+import { FacilityDotMap, CapabilityRadar, DataQualityBreakdown } from '../components/DistrictVisualizations';
 
 export function DistrictPage() {
   const { district } = useParams<{ district: string }>();
@@ -15,13 +15,13 @@ export function DistrictPage() {
 
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [nfhs5, setNfhs5] = useState<Nfhs5 | null>(null);
-  const [coverage, setCoverage] = useState<DistrictCoverage | null>(null);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [events, setEvents] = useState<AssessmentEvent[]>([]);
   const [assessment, setAssessment] = useState<AssessmentEvent | null>(null);
   const [assessing, setAssessing] = useState(false);
+  const [vizTab, setVizTab] = useState<'map' | 'radar' | 'quality'>('map');
 
   useEffect(() => {
     if (!district) return;
@@ -31,16 +31,10 @@ export function DistrictPage() {
     Promise.all([
       fetch(`/api/districts/${encodeURIComponent(district)}/facilities?${qp}`).then(r => r.json()),
       fetch(`/api/districts/${encodeURIComponent(district)}/nfhs5?${state ? `state=${encodeURIComponent(state)}` : ''}`).then(r => r.json()),
-      fetch(`/api/coverage?capability=${capability}${state ? `&state=${encodeURIComponent(state)}` : ''}`).then(r => r.json()),
     ])
-      .then(([facs, nfhs, coverageRows]) => {
+      .then(([facs, nfhs]) => {
         setFacilities(facs);
         setNfhs5(Object.keys(nfhs).length > 0 ? nfhs : null);
-        // find this district's row
-        const row = (coverageRows as DistrictCoverage[]).find(
-          r => r.district.toLowerCase() === district.toLowerCase()
-        ) ?? null;
-        setCoverage(row);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoadingFacilities(false));
@@ -117,31 +111,73 @@ export function DistrictPage() {
         <div className="mx-6 mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400">{error}</div>
       )}
 
-      {/* Visualizations strip */}
-      {coverage && (
-        <DistrictChartsStrip coverage={coverage} nfhs5={nfhs5} />
-      )}
-
-      {/* Body */}
+      {/* Body — left: visualizations + facilities  |  right: AI + NFHS-5 */}
       <div className="flex-1 min-h-0 grid grid-cols-[55fr_45fr] divide-x divide-white/8">
-        {/* Facilities */}
-        <div className="overflow-y-auto">
-          <div className="p-5 space-y-2">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-white/80 text-sm font-medium">Facilities</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/8 text-white/40">{facilities.length}</span>
+
+        {/* LEFT: visualizations on top, facilities below */}
+        <div className="flex flex-col overflow-hidden">
+
+          {/* Visualization tabs */}
+          {!loadingFacilities && (
+            <div className="flex-shrink-0 border-b border-white/8">
+              {/* Tab bar */}
+              <div className="flex border-b border-white/6">
+                {(['map', 'radar', 'quality'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setVizTab(tab)}
+                    className={`px-4 py-2.5 text-[11px] font-medium capitalize transition-colors border-b-2 -mb-px ${
+                      vizTab === tab
+                        ? 'border-[#e07340] text-[#e07340]'
+                        : 'border-transparent text-white/35 hover:text-white/60'
+                    }`}
+                  >
+                    {tab === 'map' ? '📍 Facility Map' : tab === 'radar' ? '🕸 Capability Profile' : '📊 Data Quality'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab content */}
+              <div className="p-4" style={{ height: 280 }}>
+                {vizTab === 'map' && (
+                  <FacilityDotMap
+                    facilities={facilities}
+                    district={district!}
+                    state={state}
+                  />
+                )}
+                {vizTab === 'radar' && (
+                  <CapabilityRadar
+                    facilities={facilities}
+                    currentCapability={capability}
+                  />
+                )}
+                {vizTab === 'quality' && (
+                  <DataQualityBreakdown facilities={facilities} />
+                )}
+              </div>
             </div>
-            {loadingFacilities ? (
-              <div className="flex justify-center py-10"><Spinner /></div>
-            ) : facilities.length === 0 ? (
-              <p className="text-white/25 text-sm text-center py-10">No facilities found.</p>
-            ) : (
-              facilities.map(f => <FacilityCard key={f.unique_id} facility={f} />)
-            )}
+          )}
+
+          {/* Facility list */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-5 space-y-2">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-white/80 text-sm font-medium">Facilities</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/8 text-white/40">{facilities.length}</span>
+              </div>
+              {loadingFacilities ? (
+                <div className="flex justify-center py-10"><Spinner /></div>
+              ) : facilities.length === 0 ? (
+                <p className="text-white/25 text-sm text-center py-10">No facilities found.</p>
+              ) : (
+                facilities.map(f => <FacilityCard key={f.unique_id} facility={f} />)
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right panel: assessment + NFHS-5 */}
+        {/* RIGHT: AI assessment + NFHS-5 */}
         <div className="overflow-y-auto">
           <AssessmentPanel events={events} assessment={assessment} assessing={assessing} />
           {nfhs5 && <Nfhs5Panel nfhs5={nfhs5} />}
