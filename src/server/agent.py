@@ -226,9 +226,15 @@ def _execute_tool(name: str, args: dict) -> str:
                 LOGGER.warning(f"agent | Tavily failed ({e}), trying DuckDuckGo")
 
         # Tier 2 — DuckDuckGo (free, no key required)
+        # Try gov-domain-filtered query first (mirrors Tavily's include_domains),
+        # then fall back to the unfiltered query so the LLM always has *some* evidence.
         try:
             from ddgs import DDGS
-            results = list(DDGS().text(query, max_results=5))
+            gov_query = f"{query} (site:gov.in OR site:nabh.co)"
+            results = list(DDGS().text(gov_query, max_results=5))
+            if not results:
+                LOGGER.info("agent | DuckDuckGo gov-filtered returned 0, retrying unfiltered")
+                results = list(DDGS().text(query, max_results=5))
             if results:
                 LOGGER.info(f"agent | DuckDuckGo returned {len(results)} results")
                 return json.dumps([
@@ -273,7 +279,7 @@ For each district, produce:
   "verdict_label": "human-readable label",
   "confidence": "high | medium | low",
   "summary": "2 sentences max, cite specific numbers",
-  "sources": [{"type": "database | web", "ref": "...", "detail": "..."}]
+  "sources": [{"type": "database | web", "ref": "...", "detail": "...", "trust": "high | medium | low"}]
 }
 
 Verdict rules:
@@ -281,6 +287,13 @@ Verdict rules:
 - tier2_suspect: 0 or few facilities BUT low data confidence (may be a data gap not a real desert)
 - data_hole:     insufficient data to determine — flag for investigation
 - adequate:      sufficient facilities relative to apparent need
+
+Source rules:
+- ALWAYS include at least 2 sources per district when the inputs allow (1 database + at least 1 web).
+- Pass through every web result you actually used as its own entry — do not collapse multiple URLs into one.
+- ref MUST be the full URL for web sources, the table/query name for database sources.
+- trust = "high" for *.gov.in, nabh.co, mohfw, hmis, abdm, NHP, NHA registries; "medium" for established directories (bajajfinservhealth, sehat, indiaonline, hospital chains); "low" for blogs, ad-heavy listings, unknown sources.
+- If web search returned only low-trust results, still include them — flag confidence as "low" but show the user the URLs.
 
 Output ONLY a valid JSON array — no markdown, no preamble, no trailing text."""
 
