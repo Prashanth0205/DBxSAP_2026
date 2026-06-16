@@ -15,6 +15,15 @@ interface Assessment {
   confidence: string;
   summary: string;
   sources: { type: string; ref: string; detail: string; trust?: string }[];
+  evidence?: {
+    district?: string;
+    state?: string;
+    total_facilities?: number;
+    matching_facilities?: number;
+    gap_score?: number;
+    data_confidence?: number;
+    nfhs5?: Record<string, number | null>;
+  };
 }
 
 const TRUST_STYLE: Record<string, string> = {
@@ -22,6 +31,32 @@ const TRUST_STYLE: Record<string, string> = {
   medium: 'bg-amber-100 text-amber-800 border-amber-300',
   low: 'bg-gray-100 text-gray-700 border-gray-300',
 };
+
+const TRUST_TOOLTIP: Record<string, string> = {
+  high: 'High trust: official government registry (gov.in, NABH, NHP, MoHFW, ABDM, HMIS).',
+  medium: 'Medium trust: established directory or hospital chain (Bajaj Finserv Health, Sehat, IndiaOnline).',
+  low: 'Low trust: blog, ad-heavy listing, or unverified source. Treat as a lead, not evidence.',
+};
+
+const TYPE_TOOLTIP: Record<string, string> = {
+  database: 'Pulled directly from our facility + NFHS-5 tables in Databricks. Click "View data" to see the exact rows.',
+  web: 'Returned by DuckDuckGo web search at assessment time. Gov-domain results are preferred; commercial directories fall back to medium/low trust.',
+};
+
+const NFHS5_LABELS: Record<string, string> = {
+  institutional_birth_pct: 'Institutional births (%)',
+  child_stunting_pct: 'Child stunting under-5 (%)',
+  skilled_birth_attendance_pct: 'Skilled birth attendance (%)',
+  anc_4plus_visits_pct: 'Mothers with 4+ ANC visits (%)',
+  electricity_pct: 'Households with electricity (%)',
+  health_insurance_pct: 'Health-insurance coverage (%)',
+  blood_sugar_women_pct: 'Women w/ high blood sugar (%)',
+};
+
+function fmtNum(v: number | null | undefined): string {
+  if (v === null || v === undefined) return '—';
+  return Number.isFinite(v) ? v.toFixed(2).replace(/\.?0+$/, '') : '—';
+}
 
 export function DistrictPopup({ district, capability, onClose }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -179,7 +214,12 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
               <h4 className="text-sm font-bold text-gray-700 mb-2">📊 VERDICT</h4>
               <div className="bg-blue-50 border-l-4 border-blue-500 p-3">
                 <p className="text-sm font-semibold text-blue-900">{assessment.verdict_label}</p>
-                <p className="text-xs text-blue-700 mt-1">Confidence: {assessment.confidence}</p>
+                <p
+                  className="text-xs text-blue-700 mt-1 cursor-help"
+                  title="How sure the AI is in this verdict given the inputs. HIGH = strong DB signal + corroborating web evidence. MEDIUM = one strong source or partial corroboration. LOW = sparse data, weak sources, or conflicting signals."
+                >
+                  Confidence: {assessment.confidence} <span className="text-blue-400">(?)</span>
+                </p>
               </div>
             </div>
 
@@ -190,18 +230,26 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
                   {assessment.sources.map((source, i) => {
                     const isWebUrl = source.type === 'web' && /^https?:\/\//i.test(source.ref);
                     const trust = (source.trust || '').toLowerCase();
+                    const isDb = source.type === 'database';
+                    const evidence = assessment.evidence;
                     return (
                       <div key={i} className="bg-gray-50 p-2 rounded text-xs">
                         <div className="flex items-start gap-2">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            source.type === 'database' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'
-                          }`}>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-help ${
+                              source.type === 'database' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'
+                            }`}
+                            title={TYPE_TOOLTIP[source.type.toLowerCase()] || ''}
+                          >
                             {source.type.toUpperCase()}
                           </span>
                           {trust && (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
-                              TRUST_STYLE[trust] || TRUST_STYLE.low
-                            }`}>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-help ${
+                                TRUST_STYLE[trust] || TRUST_STYLE.low
+                              }`}
+                              title={TRUST_TOOLTIP[trust] || ''}
+                            >
                               {trust.toUpperCase()}
                             </span>
                           )}
@@ -219,6 +267,46 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
                               <p className="font-medium text-gray-900 break-all">{source.ref}</p>
                             )}
                             <p className="text-gray-600 mt-1">{source.detail}</p>
+                            {isDb && evidence && (
+                              <details className="mt-1.5 group">
+                                <summary className="cursor-pointer text-blue-700 hover:text-blue-900 select-none font-medium">
+                                  View data ▾
+                                </summary>
+                                <div className="mt-1.5 bg-white border border-gray-200 rounded p-2 space-y-1.5">
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Facility coverage</p>
+                                    <table className="w-full mt-1">
+                                      <tbody>
+                                        <tr><td className="text-gray-600 py-0.5">Total facilities</td><td className="text-right font-mono text-gray-900">{evidence.total_facilities ?? '—'}</td></tr>
+                                        <tr><td className="text-gray-600 py-0.5">Matching capability</td><td className="text-right font-mono text-gray-900">{evidence.matching_facilities ?? '—'}</td></tr>
+                                        <tr><td className="text-gray-600 py-0.5">Gap score (0–10)</td><td className="text-right font-mono text-gray-900">{fmtNum(evidence.gap_score)}</td></tr>
+                                        <tr><td className="text-gray-600 py-0.5">Data confidence</td><td className="text-right font-mono text-gray-900">{fmtNum(evidence.data_confidence)}</td></tr>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  {evidence.nfhs5 && Object.values(evidence.nfhs5).some((v) => v !== null && v !== undefined) && (
+                                    <div className="pt-1.5 border-t border-gray-100">
+                                      <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">NFHS-5 indicators</p>
+                                      <table className="w-full mt-1">
+                                        <tbody>
+                                          {Object.entries(NFHS5_LABELS).map(([key, label]) => (
+                                            <tr key={key}>
+                                              <td className="text-gray-600 py-0.5">{label}</td>
+                                              <td className="text-right font-mono text-gray-900">
+                                                {fmtNum(evidence.nfhs5?.[key] as number | null | undefined)}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                  <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-100 break-all">
+                                    Source: <code>virtue_foundation_dataset.facilities</code> + <code>nfhs_5_district_health_indicators</code> via Databricks SQL warehouse.
+                                  </p>
+                                </div>
+                              </details>
+                            )}
                           </div>
                         </div>
                       </div>

@@ -389,6 +389,13 @@ async def run_batch_assessment(
         clean = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         results: list[dict] = json.loads(clean)
         LOGGER.info(f"batch | orchestrator returned {len(results)} assessments")
+
+        # Attach the exact structured payload the LLM saw, keyed by district.
+        # This powers the "View data" drill-down in the popup so every database
+        # citation is auditable against the inputs that produced the verdict.
+        evidence_by_district = {ctx["district"]: ctx for ctx in district_context}
+        for r in results:
+            r["evidence"] = evidence_by_district.get(r.get("district"), {})
         return {r["district"]: r for r in results}
     except Exception as e:
         LOGGER.error(f"batch | orchestrator failed: {e}")
