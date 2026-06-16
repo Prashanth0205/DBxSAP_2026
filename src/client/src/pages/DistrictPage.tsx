@@ -26,7 +26,7 @@ export function DistrictPage() {
   const [events, setEvents] = useState<AssessmentEvent[]>([]);
   const [assessment, setAssessment] = useState<AssessmentEvent | null>(null);
   const [assessing, setAssessing] = useState(false);
-  const [vizTab, setVizTab] = useState<'map' | 'radar' | 'quality' | 'population' | 'nearby' | 'confidence'>('map');
+  const [vizTab, setVizTab] = useState<'map' | 'radar' | 'population' | 'nearby' | 'confidence'>('map');
 
   useEffect(() => {
     if (!district) return;
@@ -137,8 +137,7 @@ export function DistrictPage() {
                   ['radar',      '🕸 Capabilities'],
                   ['population', '👥 Population'],
                   ['nearby',     '🗺 Compare'],
-                  ['confidence', '🔍 Confidence'],
-                  ['quality',    '📊 Data Quality'],
+                  ['confidence', '🔍 Data Confidence'],
                 ] as const).map(([tab, label]) => (
                   <button
                     key={tab}
@@ -170,9 +169,6 @@ export function DistrictPage() {
                 )}
                 {vizTab === 'confidence' && context && (
                   <ConfidenceBreakdown ctx={context} />
-                )}
-                {vizTab === 'quality' && (
-                  <DataQualityBreakdown facilities={facilities} />
                 )}
                 {(vizTab === 'population' || vizTab === 'nearby' || vizTab === 'confidence') && !context && (
                   <div className="flex items-center justify-center h-full text-white/25 text-xs">
