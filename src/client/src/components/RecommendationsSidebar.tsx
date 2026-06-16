@@ -18,11 +18,11 @@ interface Props {
 }
 
 const TYPE_META: Record<Recommendation['type'], { icon: string; label: string; color: string }> = {
-  upgrade:      { icon: '⬆️', label: 'Upgrade',       color: 'bg-blue-50 border-blue-200 text-blue-800' },
-  equip:        { icon: '🔧', label: 'Equip',          color: 'bg-purple-50 border-purple-200 text-purple-800' },
-  new_facility: { icon: '🏥', label: 'New Facility',   color: 'bg-red-50 border-red-200 text-red-800' },
-  data_action:  { icon: '📋', label: 'Data Action',    color: 'bg-gray-50 border-gray-200 text-gray-700' },
-  policy:       { icon: '📜', label: 'Policy',         color: 'bg-green-50 border-green-200 text-green-800' },
+  upgrade:      { icon: '', label: 'Upgrade',       color: 'bg-blue-50 border-blue-200 text-blue-800' },
+  equip:        { icon: '', label: 'Equip',          color: 'bg-purple-50 border-purple-200 text-purple-800' },
+  new_facility: { icon: '', label: 'New Facility',   color: 'bg-red-50 border-red-200 text-red-800' },
+  data_action:  { icon: '', label: 'Data Action',    color: 'bg-gray-50 border-gray-200 text-gray-700' },
+  policy:       { icon: '', label: 'Policy',         color: 'bg-green-50 border-green-200 text-green-800' },
 };
 
 const EFFORT_COLOR: Record<string, string> = {
@@ -120,7 +120,7 @@ export function RecommendationsSidebar({ district, capability, onClose }: Props)
                     {/* Priority + type header */}
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-bold text-gray-400">#{rec.priority}</span>
-                      <span className="text-sm">{meta.icon}</span>
+                      <span className="text-sm">{meta.icon && meta.icon}</span>
                       <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${meta.color}`}>
                         {meta.label}
                       </span>
