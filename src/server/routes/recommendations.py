@@ -11,8 +11,10 @@ Each recommendation is a specific, actionable card with:
   - impact: Low | Medium | High
   - priority: 1-based rank
 """
+import asyncio
 import json
 import logging
+import time
 from fastapi import APIRouter, Path, Query
 from typing import Optional
 
@@ -22,9 +24,14 @@ from server.warehouse import (
     TBL_FACILITIES, TBL_NFHS5,
 )
 from server.agent import _call_with_retry, _extract_content
+from server.lib.capability_keywords import build_ilike_conditions
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
+
+# In-process cache: (district_canon, state_canon, capability) → (timestamp, result)
+_cache: dict[tuple, tuple[float, dict]] = {}
+_CACHE_TTL = 300.0
 
 RECOMMENDATIONS_SYSTEM_PROMPT = """You are a healthcare planning advisor for India.
 
@@ -68,32 +75,40 @@ async def get_recommendations(
 
     state_canon = normalize_state(state)
     district_canon = normalize_district(district)
-    cap_pattern = f"%{capability.lower()}%"
 
-    # ── Fetch facility data ───────────────────────────────────────────────
-    try:
-        facilities = wh_query(f"""
+    cache_key = (district_canon, state_canon, capability.lower())
+    hit = _cache.get(cache_key)
+    if hit and time.time() - hit[0] < _CACHE_TTL:
+        LOGGER.info(f"recommendations | cache hit for {district}/{capability}")
+        return hit[1]
+
+    cap_condition = build_ilike_conditions(capability, [
+        "LOWER(COALESCE(f.specialties,'') || ' ' || COALESCE(f.capability,'') || ' ' || COALESCE(f.description,''))"
+    ])
+
+    # ── Fetch facility + NFHS-5 data in parallel ─────────────────────────
+    def _fetch_facilities():
+        try:
+            return wh_query(f"""
 WITH {alias_ctes()}
 SELECT
   f.name, f.organization_type,
   f.numberDoctors, f.capacity,
   f.specialties, f.capability, f.equipment, f.procedure,
   f.description, f.yearEstablished, f.address_city,
-  CASE WHEN LOWER(
-    COALESCE(f.specialties,'') || ' ' || COALESCE(f.capability,'') || ' ' || COALESCE(f.description,'')
-  ) LIKE :p1 THEN true ELSE false END AS has_capability
+  CASE WHEN {cap_condition} THEN true ELSE false END AS has_capability
 FROM {TBL_FACILITIES} f
 JOIN pin_norm p ON CAST(f.address_zipOrPostcode AS STRING) = CAST(p.pincode AS STRING)
-WHERE p.state_canon = :p2 AND p.district_canon = :p3
+WHERE p.state_canon = :p1 AND p.district_canon = :p2
 LIMIT 50
-""", [cap_pattern, state_canon, district_canon])
-    except Exception as e:
-        LOGGER.warning(f"recommendations | facility query failed: {e}")
-        facilities = []
+""", [state_canon, district_canon])
+        except Exception as e:
+            LOGGER.warning(f"recommendations | facility query failed: {e}")
+            return []
 
-    # ── Fetch NFHS-5 data ─────────────────────────────────────────────────
-    try:
-        nfhs_rows = wh_query(f"""
+    def _fetch_nfhs():
+        try:
+            rows = wh_query(f"""
 WITH {alias_ctes()}
 SELECT
   institutional_birth_5y_pct,
@@ -108,16 +123,21 @@ FROM nfhs_canon
 WHERE state_canon = :p1 AND district_canon = :p2
 LIMIT 1
 """, [state_canon, district_canon])
-        nfhs5 = nfhs_rows[0] if nfhs_rows else {}
-    except Exception as e:
-        LOGGER.warning(f"recommendations | NFHS-5 query failed: {e}")
-        nfhs5 = {}
+            return rows[0] if rows else {}
+        except Exception as e:
+            LOGGER.warning(f"recommendations | NFHS-5 query failed: {e}")
+            return {}
+
+    loop = asyncio.get_event_loop()
+    facilities, nfhs5 = await asyncio.gather(
+        loop.run_in_executor(None, _fetch_facilities),
+        loop.run_in_executor(None, _fetch_nfhs),
+    )
 
     # ── Build LLM context ─────────────────────────────────────────────────
     matching = [f for f in facilities if f.get("has_capability")]
     non_matching = [f for f in facilities if not f.get("has_capability")]
 
-    # Summarise facilities to avoid token overload
     def summarise_facility(f: dict) -> dict:
         return {
             "name": f.get("name"),
@@ -161,7 +181,9 @@ LIMIT 1
         clean = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         recommendations = json.loads(clean)
         LOGGER.info(f"recommendations | generated {len(recommendations)} for {district}/{capability}")
-        return {"district": district, "state": state, "capability": capability, "recommendations": recommendations}
+        result = {"district": district, "state": state, "capability": capability, "recommendations": recommendations}
+        _cache[cache_key] = (time.time(), result)
+        return result
     except Exception as e:
         LOGGER.error(f"recommendations | LLM failed: {e}")
         return {
