@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { CoverageMap } from '../components/CoverageMap';
 import { DistrictPopup } from '../components/DistrictPopup';
 import {
@@ -23,6 +24,12 @@ export function MapPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasQueried, setHasQueried] = useState(false);
+  const navigate = useNavigate();
+
+  function openDistrictPage(d: DistrictCoverage) {
+    const qp = new URLSearchParams({ capability, state: d.state });
+    navigate(`/district/${encodeURIComponent(d.district)}?${qp}`);
+  }
 
   async function analyze() {
     setLoading(true);
@@ -168,7 +175,7 @@ export function MapPage() {
                 return (
                   <button
                     key={i}
-                    onClick={() => handleDistrictClick(d.district, d.state)}
+                    onClick={() => openDistrictPage(d)}
                     className="w-full text-left px-4 py-2.5 border-b border-white/5 hover:bg-white/5 transition-colors group"
                   >
                     <div className="flex items-center justify-between gap-2">

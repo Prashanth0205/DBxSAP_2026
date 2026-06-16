@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import {
-  DistrictCoverage, categorizeDistrict, CATEGORY_META,
+  DistrictCoverage, gapColor, categorizeDistrict, CATEGORY_META,
 } from '../lib/types';
 
 interface Props {
@@ -21,6 +22,12 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [loadingAssessment, setLoadingAssessment] = useState(false);
+  const navigate = useNavigate();
+
+  function openFullPage() {
+    const qp = new URLSearchParams({ capability, state: district.state });
+    navigate(`/district/${encodeURIComponent(district.district)}?${qp}`);
+  }
 
   const category = categorizeDistrict(district);
   const categoryMeta = CATEGORY_META[category];
@@ -92,6 +99,12 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
             className="w-full py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors border border-blue-200"
           >
             See Details ▼
+          </button>
+          <button
+            onClick={openFullPage}
+            className="w-full py-2 text-sm font-semibold text-white bg-[#e07340] hover:bg-[#c9632f] rounded transition-colors"
+          >
+            Open full analysis →
           </button>
         </div>
       </div>
@@ -201,12 +214,20 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
           </div>
         )}
 
-        <button
-          onClick={() => setExpanded(false)}
-          className="w-full py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors mt-4 border border-gray-200"
-        >
-          Collapse ▲
-        </button>
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={() => setExpanded(false)}
+            className="flex-1 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors border border-gray-200"
+          >
+            Collapse ▲
+          </button>
+          <button
+            onClick={openFullPage}
+            className="flex-1 py-2 text-sm font-semibold text-white bg-[#e07340] hover:bg-[#c9632f] rounded transition-colors"
+          >
+            Open full analysis →
+          </button>
+        </div>
       </div>
     </div>
   );
