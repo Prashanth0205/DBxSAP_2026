@@ -52,7 +52,7 @@ export function MapPage() {
 
   const categorized = districts.map(d => ({ ...d, category: categorizeDistrict(d) }));
   const counts: Record<DistrictCategory, number> = {
-    no_facilities: 0, real_desert: 0, data_poor: 0, hidden_risk: 0, adequate: 0,
+    no_facilities: 0, real_desert: 0, data_poor: 0, data_gap: 0, hidden_risk: 0, adequate: 0,
   };
   categorized.forEach(d => { counts[d.category]++; });
 
@@ -60,7 +60,7 @@ export function MapPage() {
   // then by gap_score asc. no_facilities sits above data_poor so the planner
   // sees outright-zero districts before under-sampled ones.
   const categoryOrder: Record<DistrictCategory, number> = {
-    real_desert: 0, hidden_risk: 1, no_facilities: 2, data_poor: 3, adequate: 4,
+    real_desert: 0, hidden_risk: 1, no_facilities: 2, data_gap: 3, data_poor: 4, adequate: 5,
   };
   const sorted = [...categorized].sort((a, b) => {
     const co = categoryOrder[a.category] - categoryOrder[b.category];
@@ -135,6 +135,7 @@ export function MapPage() {
             <CategoryRow category="real_desert"   count={counts.real_desert} />
             <CategoryRow category="hidden_risk"   count={counts.hidden_risk} />
             <CategoryRow category="no_facilities" count={counts.no_facilities} />
+            <CategoryRow category="data_gap"      count={counts.data_gap} />
             <CategoryRow category="data_poor"     count={counts.data_poor} />
             <CategoryRow category="adequate"      count={counts.adequate} />
 
