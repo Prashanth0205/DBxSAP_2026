@@ -275,7 +275,11 @@ export function categorizeDistrict(d: DistrictCoverage): DistrictCategory {
   let poorHealth: boolean;
   const lowInstBirth = instBirth != null && instBirth < 70;
   const highStunting = stunting != null && stunting > 35;
-  poorHealth = lowInstBirth || highStunting;
+  // High institutional births (>= 80%) is a strong positive access signal —
+  // it overrides stunting as a desert indicator. Stunting reflects nutrition
+  // broadly, not specifically whether maternity facilities are accessible.
+  const strongAccessSignal = instBirth != null && instBirth >= 80;
+  poorHealth = lowInstBirth || (highStunting && !strongAccessSignal);
 
   if (sparseCoverage && poorHealth) return 'real_desert';
   if (sparseCoverage && !poorHealth) return 'data_poor';
