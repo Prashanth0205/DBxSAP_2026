@@ -294,6 +294,15 @@ export function WorkspacePage() {
             hh_electricity_pct: null,
             hh_improved_water_pct: null,
             hh_use_improved_sanitation_pct: null,
+            skilled_birth_attendance_pct: null,
+            anc_4plus_visits_pct: null,
+            child_vaccinated_pct: null,
+            health_insurance_pct: null,
+            women_anaemic_pct: null,
+            hypertension_pct: null,
+            high_blood_sugar_pct: null,
+            cervical_screening_pct: null,
+            women_tobacco_pct: null,
           } as DistrictCoverage}
           capability={recScenario.capability}
           onClose={() => setRecScenario(null)}
