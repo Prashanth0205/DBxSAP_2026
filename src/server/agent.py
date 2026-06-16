@@ -78,7 +78,7 @@ async def _call_llm_async(
     max_tokens: int = 4096,
     temperature: float = 0.1,
 ) -> dict:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None, lambda: _call_llm(messages, tools, max_tokens, temperature)
     )
