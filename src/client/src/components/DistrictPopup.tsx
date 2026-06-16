@@ -482,9 +482,9 @@ function SourcesSection({
         )}
       </div>
 
+      {webSources.length > 0 && (
       <div>
         <h4 className="text-sm font-bold text-gray-700 mb-2">WEB SOURCES</h4>
-        {webSources.length > 0 ? (
           <div className="space-y-2">
             {webSources.map((source, i) => {
               const trust = (source.trust || '').toLowerCase();
@@ -548,12 +548,8 @@ function SourcesSection({
               );
             })}
           </div>
-        ) : (
-          <p className="text-xs text-gray-500 italic bg-gray-50 p-2 rounded">
-            No relevant web articles found for this district.
-          </p>
-        )}
       </div>
+      )}
     </div>
   );
 }

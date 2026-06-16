@@ -212,8 +212,14 @@ export function MapPage() {
 
         {/* District Popup Overlay */}
         {selectedDistrict && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-[10000] pointer-events-none">
-            <div className="pointer-events-auto">
+          <div
+            className={
+              showRecommendations
+                ? 'absolute top-4 right-[436px] z-[10000] pointer-events-none'
+                : 'absolute inset-0 flex items-center justify-center bg-black/20 z-[10000] pointer-events-none'
+            }
+          >
+            <div className="pointer-events-auto max-h-[calc(100vh-2rem)] overflow-y-auto">
               <DistrictPopup
                 district={selectedDistrict}
                 capability={capability}

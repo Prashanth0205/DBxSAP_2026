@@ -17,12 +17,12 @@ interface Props {
   onClose: () => void;
 }
 
-const TYPE_META: Record<Recommendation['type'], { icon: string; label: string; color: string }> = {
-  upgrade:      { icon: '', label: 'Upgrade',       color: 'bg-blue-50 border-blue-200 text-blue-800' },
-  equip:        { icon: '', label: 'Equip',          color: 'bg-purple-50 border-purple-200 text-purple-800' },
-  new_facility: { icon: '', label: 'New Facility',   color: 'bg-red-50 border-red-200 text-red-800' },
-  data_action:  { icon: '', label: 'Data Action',    color: 'bg-gray-50 border-gray-200 text-gray-700' },
-  policy:       { icon: '', label: 'Policy',         color: 'bg-green-50 border-green-200 text-green-800' },
+const TYPE_META: Record<Recommendation['type'], { icon: string; label: string; border: string; badge: string }> = {
+  upgrade:      { icon: '', label: 'Upgrade',       border: 'border-blue-300',   badge: 'bg-blue-100 text-blue-800 border-blue-200' },
+  equip:        { icon: '', label: 'Equip',          border: 'border-purple-300', badge: 'bg-purple-100 text-purple-800 border-purple-200' },
+  new_facility: { icon: '', label: 'New Facility',   border: 'border-red-300',    badge: 'bg-red-100 text-red-800 border-red-200' },
+  data_action:  { icon: '', label: 'Data Action',    border: 'border-slate-300',  badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+  policy:       { icon: '', label: 'Policy',         border: 'border-green-300',  badge: 'bg-green-100 text-green-800 border-green-200' },
 };
 
 const EFFORT_COLOR: Record<string, string> = {
@@ -85,7 +85,7 @@ export function RecommendationsSidebar({ district, capability, onClose }: Props)
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4 bg-white">
           {loading && (
             <div className="flex flex-col items-center justify-center h-40 gap-3">
               <svg className="animate-spin h-6 w-6 text-[#e07340]" fill="none" viewBox="0 0 24 24">
@@ -118,13 +118,13 @@ export function RecommendationsSidebar({ district, capability, onClose }: Props)
                 return (
                   <div
                     key={i}
-                    className={`rounded-xl border p-4 ${meta.color}`}
+                    className={`rounded-xl border bg-white p-4 shadow-sm ${meta.border}`}
                   >
                     {/* Priority + type header */}
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-bold text-gray-400">#{rec.priority}</span>
                       <span className="text-sm">{meta.icon && meta.icon}</span>
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${meta.color}`}>
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${meta.badge}`}>
                         {meta.label}
                       </span>
                       {rec.target && (
