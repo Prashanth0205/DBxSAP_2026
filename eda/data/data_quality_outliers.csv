@@ -1,0 +1,18 @@
+check,n,total,pct,note
+total_facility_rows,10088,10088,100.00,baseline
+name_dupes_total,557,10088,5.52,facility names that appear more than once (mostly multi-branch chains)
+name_pin_dupes,16,10088,0.16,probable duplicate records (same name AND same pincode)
+coord_dupes,53,10088,0.53,same lat/lon used for multiple records (campus or geocode-to-centroid)
+coords_outside_india_bbox,6,10088,0.06,lat/lon outside 6-37N 68-97E India bbox (geocoding errors)
+coords_at_origin,0,10088,0.00,lat=0 lon=0 sentinel
+coords_null,118,10088,1.17,latitude or longitude is NULL
+pincode_missing,66,10088,0.65,no pincode at all
+pincode_malformed_total,250,10088,2.48,pincode does not match ^[0-9]{6}$
+pincode_with_space_or_hyphen,160,10088,1.59,fixable via REPLACE: '629 165' style
+pincode_other,59,10088,0.58,unclassified malformations
+pincode_contains_letters,21,10088,0.21,not a valid Indian PIN
+pincode_5_digit,6,10088,0.06,leading zero stripped during ingestion
+pincode_7_plus_digits,3,10088,0.03,too many digits
+pincode_4_digit,1,10088,0.01,too few digits
+distinct_state_values,254,10088,,raw cardinality of address_stateOrRegion (vs 36 actual states/UTs)
+state_missing,63,10088,0.62,no state at all

@@ -33,6 +33,10 @@ We aggregate trust-weighted facility evidence across geography (state, district,
 
 **Minimum workflow.** A planner selects a capability (e.g. maternity, ICU, NICU) and a geography, sees regional coverage with confidence levels, drills into the facility records behind any aggregate, and saves a planning scenario with notes.
 
+## Headline findings
+
+Five things our dataset exploration proved, that directly shaped the app. Full writeup with citations: [`eda/README.md`](eda/README.md).
+
 ## Data
 
 Three Delta-Sharing tables in catalog `databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset`:
@@ -55,7 +59,7 @@ india_post_pincode_directory.pincode → district, statename
 nfhs_5_district_health_indicators → outcomes
 ```
 
-The NFHS↔pincode-directory join was the single biggest engineering risk for Track 2. It is now resolved end-to-end via three layers under `/eda`: a SQL normalization CTE, a 3-row state alias file, and a 141-row district alias set (75 auto-accepted via difflib + 66 hand-curated for government renames, abbreviations, and word reorderings). See [`eda/exploration.md`](eda/exploration.md) for the full pass-1 findings — coverage tables, the literal-`"null"`-string trap, and the alias resolution audit trail.
+The NFHS↔pincode-directory join was the single biggest engineering risk for Track 2. It is now resolved end-to-end via three layers under `/eda`: a SQL normalization CTE, a 3-row state alias file, and a 141-row district alias set (75 auto-accepted via difflib + 66 hand-curated for government renames, abbreviations, and word reorderings). See [`eda/README.md`](eda/README.md) for the full headline findings, then drill into [`eda/findings/exploration.md`](eda/findings/exploration.md) (pass 1 — coverage + alias resolution) and [`eda/findings/exploration_pass2.md`](eda/findings/exploration_pass2.md) (pass 2 — capability-keyword multipliers, 5-category classifier distribution, facility↔outcome correlations, data-quality outliers).
 
 ## Repo layout
 
@@ -64,13 +68,12 @@ The NFHS↔pincode-directory join was the single biggest engineering risk for Tr
 ├── README.md                  ← you are here
 ├── databricks.yml             ← Databricks Asset Bundle (app + Lakebase resource)
 ├── eda/                       ← exploration writeups + alias resolution artifacts
-│   ├── exploration.md
-│   ├── facilities_by_state.csv
-│   ├── state_aliases.csv          (NFHS → pincode-dir, 3 rows)
-│   ├── district_aliases_auto.csv  (fuzzy ≥ 0.90, 75 rows)
-│   ├── district_aliases_manual.csv (hand-curated, 66 rows)
-│   ├── sql/district_normalize.sql (reusable join CTE)
-│   └── notes/                     (review notes, audit trail)
+│   ├── README.md                  (headline findings + folder index)
+│   ├── findings/                  pass 1 + pass 2 markdown writeups
+│   ├── data/                      derived CSVs (capability/category/NFHS/quality + alias tables)
+│   ├── scripts/                   reproducibility — fuzzy_match.py, validate_coverage.py, category_distribution.py + JSON snapshots
+│   ├── sql/                       reusable SQL (district_normalize.sql)
+│   └── notes/                     review notes, audit trail
 └── src/                       ← AppKit scaffold (React + Express + Lakebase)
     ├── client/                    Vite + React 19 frontend
     ├── server/                    Express API
@@ -107,4 +110,4 @@ Full instructions, troubleshooting, and local-dev setup: [DEPLOY.md](DEPLOY.md).
 
 ## Status
 
-EDA pass 1 complete. NFHS↔pincode-directory district resolution at 100% (706/706) via the alias layers under `/eda`. AppKit scaffold (React + Express + Lakebase) landed under `/src` and bundles via `databricks.yml`. Track 2 application logic — facility trust-weighting, the [low/high coverage] × [low/high outcome] desert classifier, and saved-scenario persistence — has not been built yet on top of the scaffold.
+EDA passes 1 + 2 complete. NFHS↔pincode-directory district resolution at 100% (706/706) via the alias layers under `/eda`. AppKit scaffold (React + Express + Lakebase) landed under `/src` and bundles via `databricks.yml`. Track 2 application logic shipped: capability picker (7 capabilities) + keyword-expanded ILIKE match, 5-category district classifier ([`types.ts:243`](src/client/src/lib/types.ts)), choropleth coverage map with stripe patterns for low-confidence buckets, drill-down popups citing the source field for every claim, web-search-augmented LLM agent with explicit inconsistency detection, and Lakebase-backed scenario / shortlist / notes persistence.

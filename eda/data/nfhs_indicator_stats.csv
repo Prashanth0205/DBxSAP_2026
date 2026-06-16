@@ -1,0 +1,6 @@
+indicator,n,p_min,p10,p25,p50,p75,p90,p_max,mean
+institutional_birth_5y_pct,706,21.4,73.9,83.7,92.2,97.4,99.4,100.0,88.7
+child_stunting_pct,705,13.2,23.1,27.3,32.9,39.2,45.1,60.6,33.5
+hh_electricity_pct,706,68.4,92.3,96.4,98.7,99.5,99.8,100.0,97.0
+hh_improved_water_pct,706,41.2,83.1,92.0,97.0,99.3,99.8,100.0,93.7
+hh_use_improved_sanitation_pct,706,29.2,52.6,62.0,73.8,83.3,88.5,99.9,71.9

@@ -1,0 +1,8 @@
+capability,no_facilities,real_desert,data_poor,hidden_risk,adequate,total
+icu,174,168,214,93,108,757
+maternity,174,62,53,183,285,757
+emergency,174,75,75,172,261,757
+dialysis,174,179,203,80,121,757
+oncology,174,197,228,64,94,757
+trauma,174,91,81,160,251,757
+nicu,174,232,295,37,19,757
