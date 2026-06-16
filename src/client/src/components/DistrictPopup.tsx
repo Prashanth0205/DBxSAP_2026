@@ -23,6 +23,7 @@ interface Props {
   district: DistrictCoverage;
   capability: string;
   onClose: () => void;
+  onViewRecommendations: () => void;
 }
 
 interface Assessment {
@@ -74,7 +75,7 @@ function fmtNum(v: number | null | undefined): string {
   return Number.isFinite(v) ? v.toFixed(2).replace(/\.?0+$/, '') : '—';
 }
 
-export function DistrictPopup({ district, capability, onClose }: Props) {
+export function DistrictPopup({ district, capability, onClose, onViewRecommendations }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [loadingAssessment, setLoadingAssessment] = useState(false);
@@ -209,6 +210,12 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
           >
             View facility evidence →
           </Link>
+          <button
+            onClick={onViewRecommendations}
+            className="w-full py-2 text-sm font-semibold text-white bg-[#e07340] hover:bg-[#c9632f] rounded transition-colors"
+          >
+            View Recommendations
+          </button>
         </div>
       </div>
     );
@@ -411,12 +418,20 @@ export function DistrictPopup({ district, capability, onClose }: Props) {
           View facility evidence →
         </Link>
 
-        <button
-          onClick={() => setExpanded(false)}
-          className="w-full py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors mt-2 border border-gray-200"
-        >
-          Collapse ▲
-        </button>
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => setExpanded(false)}
+            className="flex-1 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors border border-gray-200"
+          >
+            Collapse ▲
+          </button>
+          <button
+            onClick={onViewRecommendations}
+            className="flex-1 py-2 text-sm font-semibold text-white bg-[#e07340] hover:bg-[#c9632f] rounded transition-colors"
+          >
+            Recommendations
+          </button>
+        </div>
       </div>
     </div>
   );

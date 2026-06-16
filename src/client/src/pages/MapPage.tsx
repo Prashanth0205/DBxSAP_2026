@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CoverageMap } from '../components/CoverageMap';
 import { DistrictPopup } from '../components/DistrictPopup';
+import { RecommendationsSidebar } from '../components/RecommendationsSidebar';
 import {
   CAPABILITY_TAGS, DistrictCoverage, CapabilityTag,
   categorizeDistrict, CATEGORY_META, DistrictCategory,
@@ -20,6 +21,7 @@ export function MapPage() {
   const [state, setState] = useState('');
   const [districts, setDistricts] = useState<DistrictCoverage[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictCoverage | null>(null);
+  const [showRecommendations, setShowRecommendations] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasQueried, setHasQueried] = useState(false);
@@ -211,12 +213,22 @@ export function MapPage() {
               <DistrictPopup
                 district={selectedDistrict}
                 capability={capability}
-                onClose={() => setSelectedDistrict(null)}
+                onClose={() => { setSelectedDistrict(null); setShowRecommendations(false); }}
+                onViewRecommendations={() => setShowRecommendations(true)}
               />
             </div>
           </div>
         )}
       </div>
+
+      {/* Recommendations sidebar — rendered outside map panel so it overlays the full screen */}
+      {selectedDistrict && showRecommendations && (
+        <RecommendationsSidebar
+          district={selectedDistrict}
+          capability={capability}
+          onClose={() => setShowRecommendations(false)}
+        />
+      )}
     </div>
   );
 }
