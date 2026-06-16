@@ -179,17 +179,19 @@ export function confidenceBadgeClass(c: number): string {
 // District Categorization (based on Track 2 spec)
 //
 // Cross-references facility coverage with NFHS-5 health outcomes to
-// distinguish three meaningful categories:
+// distinguish meaningful categories:
 //
-//   real_desert  — sparse facilities AND poor health outcomes
-//   data_poor    — sparse facilities BUT adequate health outcomes
-//                  (under-sampled, not under-served)
-//   hidden_risk  — adequate facility count BUT poor health outcomes
-//                  (capability mismatch, low-trust evidence)
-//   adequate     — adequate facilities AND adequate health outcomes
+//   no_facilities — zero facility records in the dataset (cannot judge supply)
+//   real_desert   — sparse facilities AND poor health outcomes
+//   data_poor     — sparse facilities BUT adequate health outcomes
+//                   (under-sampled, not under-served)
+//   hidden_risk   — adequate facility count BUT poor health outcomes
+//                   (capability mismatch, low-trust evidence)
+//   adequate      — adequate facilities AND adequate health outcomes
 // ---------------------------------------------------------------------------
 
-export type DistrictCategory = 'real_desert' | 'data_poor' | 'hidden_risk' | 'adequate';
+export type DistrictCategory =
+  | 'no_facilities' | 'real_desert' | 'data_poor' | 'hidden_risk' | 'adequate';
 
 export const CATEGORY_META: Record<DistrictCategory, {
   label: string;
@@ -197,6 +199,12 @@ export const CATEGORY_META: Record<DistrictCategory, {
   color: string;
   description: string;
 }> = {
+  no_facilities: {
+    label: 'No Facility Records',
+    shortLabel: 'No Records',
+    color: '#475569',
+    description: 'Dataset has zero facility records here — could be a true desert, could be a data-collection gap',
+  },
   real_desert: {
     label: 'Real Medical Desert',
     shortLabel: 'Desert',
@@ -226,11 +234,15 @@ export const CATEGORY_META: Record<DistrictCategory, {
 /**
  * Categorize a district based on facility coverage AND health outcomes.
  *
+ * No facilities:          total_facilities === 0 — distinct signal from
+ *                         "we have data and it shows zero matches"
  * Sparse coverage:        gap_score <= 3 (less than ~30% matching facilities)
  * Poor health outcomes:   institutional birth < 70% OR child stunting > 35%
  *                         (or low data confidence falls back to gap_score signal)
  */
 export function categorizeDistrict(d: DistrictCoverage): DistrictCategory {
+  if (d.total_facilities === 0) return 'no_facilities';
+
   const sparseCoverage = d.gap_score <= 3;
 
   // Health outcome heuristics from NFHS-5 (lower = worse)

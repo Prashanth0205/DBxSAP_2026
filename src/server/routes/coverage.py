@@ -30,11 +30,19 @@ def get_coverage(
     state_canon = normalize_state(state) if state else None
     cap_pattern = f"%{capability.lower()}%"
 
-    state_filter = "WHERE fd.state_canon = :p2" if state_canon else ""
-    limit_clause = "" if state_canon else "LIMIT 500"
+    # Filter applied to the districts list (every Indian district from the
+    # pincode directory), not to the facility aggregates — so districts with
+    # zero facilities still appear in the response.
+    state_filter = "WHERE state_canon = :p2" if state_canon else ""
 
     sql = f"""
 WITH {alias_ctes()},
+districts AS (
+  SELECT DISTINCT state_canon, district_canon
+  FROM pin_norm
+  WHERE state_canon IS NOT NULL AND state_canon <> ''
+    AND district_canon IS NOT NULL AND district_canon <> ''
+),
 fac AS (
   SELECT
     f.unique_id,
@@ -55,7 +63,7 @@ fac_district AS (
   FROM fac f
   JOIN pin_norm p ON f.pincode = CAST(p.pincode AS STRING)
 ),
-agg AS (
+fac_agg AS (
   SELECT
     fd.state_canon,
     fd.district_canon,
@@ -71,8 +79,20 @@ agg AS (
       ) / 6.0
     ), 2) AS confidence
   FROM fac_district fd
-  {state_filter}
   GROUP BY fd.state_canon, fd.district_canon
+),
+agg AS (
+  SELECT
+    d.state_canon,
+    d.district_canon,
+    COALESCE(fa.total_facilities,    0) AS total_facilities,
+    COALESCE(fa.matching_facilities, 0) AS matching_facilities,
+    COALESCE(fa.confidence,        0.0) AS confidence
+  FROM districts d
+  LEFT JOIN fac_agg fa
+    ON d.state_canon = fa.state_canon
+   AND d.district_canon = fa.district_canon
+  {state_filter}
 )
 SELECT
   INITCAP(LOWER(a.district_canon)) AS district,
@@ -95,7 +115,6 @@ LEFT JOIN nfhs_canon n
   ON a.state_canon    = n.state_canon
  AND a.district_canon = n.district_canon
 ORDER BY gap_score ASC, confidence DESC
-{limit_clause}
 """.strip()
 
     params = [cap_pattern, state_canon] if state_canon else [cap_pattern]

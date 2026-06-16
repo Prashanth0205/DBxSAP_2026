@@ -52,19 +52,24 @@ export function MapPage() {
 
   const categorized = districts.map(d => ({ ...d, category: categorizeDistrict(d) }));
   const counts: Record<DistrictCategory, number> = {
-    real_desert: 0, data_poor: 0, hidden_risk: 0, adequate: 0,
+    no_facilities: 0, real_desert: 0, data_poor: 0, hidden_risk: 0, adequate: 0,
   };
   categorized.forEach(d => { counts[d.category]++; });
 
-  // Sort: real_desert > hidden_risk > data_poor > adequate, then by gap_score asc
+  // Sort: real_desert > hidden_risk > no_facilities > data_poor > adequate,
+  // then by gap_score asc. no_facilities sits above data_poor so the planner
+  // sees outright-zero districts before under-sampled ones.
   const categoryOrder: Record<DistrictCategory, number> = {
-    real_desert: 0, hidden_risk: 1, data_poor: 2, adequate: 3,
+    real_desert: 0, hidden_risk: 1, no_facilities: 2, data_poor: 3, adequate: 4,
   };
   const sorted = [...categorized].sort((a, b) => {
     const co = categoryOrder[a.category] - categoryOrder[b.category];
     if (co !== 0) return co;
     return a.gap_score - b.gap_score;
   });
+
+  const totalFacilities = districts.reduce((s, d) => s + d.total_facilities, 0);
+  const districtsWithFacilities = districts.filter(d => d.total_facilities > 0).length;
 
   return (
     <div className="h-full flex">
@@ -127,10 +132,19 @@ export function MapPage() {
             <p className="text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-1.5">
               Categories
             </p>
-            <CategoryRow category="real_desert" count={counts.real_desert} />
-            <CategoryRow category="hidden_risk" count={counts.hidden_risk} />
-            <CategoryRow category="data_poor"   count={counts.data_poor} />
-            <CategoryRow category="adequate"    count={counts.adequate} />
+            <CategoryRow category="real_desert"   count={counts.real_desert} />
+            <CategoryRow category="hidden_risk"   count={counts.hidden_risk} />
+            <CategoryRow category="no_facilities" count={counts.no_facilities} />
+            <CategoryRow category="data_poor"     count={counts.data_poor} />
+            <CategoryRow category="adequate"      count={counts.adequate} />
+
+            <p className="text-[10px] text-white/35 leading-snug pt-2 mt-1 border-t border-white/8">
+              Coverage based on <span className="text-white/55 font-semibold">{totalFacilities.toLocaleString()}</span> facility records
+              across <span className="text-white/55 font-semibold">{districtsWithFacilities}</span>/<span className="text-white/55 font-semibold">{districts.length}</span> districts.
+              {counts.no_facilities > 0 && (
+                <> <span className="text-white/55 font-semibold">{counts.no_facilities}</span> districts have no records — these may indicate true care deserts OR data-collection gaps.</>
+              )}
+            </p>
           </div>
         )}
 

@@ -43,10 +43,11 @@ function injectStripePatterns(map: L.Map) {
 
   // One stripe pattern per category — used when data confidence is low
   const PATTERNS: Array<{ id: string; color: string }> = [
-    { id: 'stripe-real_desert', color: CATEGORY_META.real_desert.color },
-    { id: 'stripe-hidden_risk', color: CATEGORY_META.hidden_risk.color },
-    { id: 'stripe-data_poor',   color: CATEGORY_META.data_poor.color },
-    { id: 'stripe-adequate',    color: CATEGORY_META.adequate.color },
+    { id: 'stripe-no_facilities', color: CATEGORY_META.no_facilities.color },
+    { id: 'stripe-real_desert',   color: CATEGORY_META.real_desert.color },
+    { id: 'stripe-hidden_risk',   color: CATEGORY_META.hidden_risk.color },
+    { id: 'stripe-data_poor',     color: CATEGORY_META.data_poor.color },
+    { id: 'stripe-adequate',      color: CATEGORY_META.adequate.color },
   ];
 
   for (const { id, color } of PATTERNS) {
@@ -263,7 +264,9 @@ export function CoverageMap({ districts, onDistrictClick }: Props) {
 }
 
 function MapLegend() {
-  const categories: DistrictCategory[] = ['real_desert', 'hidden_risk', 'data_poor', 'adequate'];
+  const categories: DistrictCategory[] = [
+    'real_desert', 'hidden_risk', 'data_poor', 'no_facilities', 'adequate',
+  ];
   return (
     <div className="absolute bottom-5 right-4 z-[9999] bg-[#1a1d23]/90 backdrop-blur rounded-lg px-3 py-2.5 text-xs border border-white/10 max-w-[260px]">
       <p className="font-semibold mb-2 text-white/50 uppercase tracking-widest text-[10px]">Categories</p>
