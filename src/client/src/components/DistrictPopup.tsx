@@ -139,9 +139,13 @@ export function DistrictPopup({ district, capability, onClose, onViewRecommendat
 
   // Click anywhere outside the popup closes it. Mousedown so it fires before
   // any click handlers inside the popup re-trigger the open state.
+  // Exception: clicks inside the recommendations sidebar must not close the
+  // popup, since the popup's onClose also tears down the sidebar.
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+      const target = e.target as Element | null;
+      if (target?.closest('[data-recommendations-sidebar]')) return;
+      if (popupRef.current && !popupRef.current.contains(target as Node)) {
         onClose();
       }
     }
