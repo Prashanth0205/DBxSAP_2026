@@ -7,7 +7,7 @@ resolution layers we built:
   2. state_aliases.csv                                  -- handles state name divergence
   3. district_aliases_{auto,manual}.csv                 -- handles district renames/variants
 
-Reads the same _data/*.json snapshots that fuzzy_match.py reads, so this is a
+Reads the same scripts/*.json snapshots that fuzzy_match.py reads, so this is a
 self-contained check that doesn't need a Databricks warehouse.
 """
 
@@ -30,13 +30,13 @@ def main() -> None:
 
     # load aliases
     state_alias: dict[str, str] = {}
-    with (EDA / "state_aliases.csv").open() as f:
+    with (EDA / "data" / "state_aliases.csv").open() as f:
         for row in csv.DictReader(f):
             state_alias[row["nfhs_state_norm"]] = row["canonical_state_norm"]
 
     district_alias: dict[tuple[str, str], tuple[str, str]] = {}
     for fname in ("district_aliases_auto.csv", "district_aliases_manual.csv"):
-        with (EDA / fname).open() as f:
+        with (EDA / "data" / fname).open() as f:
             for row in csv.DictReader(f):
                 # key by (raw_state, raw_district) since that's what we'll
                 # match against the NFHS source rows

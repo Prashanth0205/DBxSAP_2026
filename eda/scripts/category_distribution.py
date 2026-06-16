@@ -33,7 +33,7 @@ def _norm(s: str) -> str:
 
 def load_state_aliases():
     rows = []
-    with open(EDA / "state_aliases.csv") as f:
+    with open(EDA / "data" / "state_aliases.csv") as f:
         r = csv.DictReader(f)
         for row in r:
             rows.append((row["nfhs_state_norm"], row["canonical_state_norm"]))
@@ -43,7 +43,7 @@ def load_state_aliases():
 def load_district_aliases():
     rows = []
     for fname in ("district_aliases_auto.csv", "district_aliases_manual.csv"):
-        with open(EDA / fname) as f:
+        with open(EDA / "data" / fname) as f:
             r = csv.DictReader(f)
             for row in r:
                 ns = _norm(row["nfhs_state_raw"])
@@ -196,8 +196,8 @@ def categorize(total, matching, instbirth, stunting):
 
 def main():
     sql = build_sql()
-    (EDA / "_data" / "category_distribution_query.sql").write_text(sql)
-    print(f"SQL written to _data/category_distribution_query.sql ({len(sql)} chars)", file=sys.stderr)
+    (EDA / "scripts" / "category_distribution_query.sql").write_text(sql)
+    print(f"SQL written to scripts/category_distribution_query.sql ({len(sql)} chars)", file=sys.stderr)
 
     proc = subprocess.run(
         ["databricks", "experimental", "aitools", "tools", "query",
@@ -231,7 +231,7 @@ def main():
             cat = categorize(total, matching, instbirth, stunting)
             counts[cap][cat] += 1
 
-    out = EDA / "category_distribution_by_capability.csv"
+    out = EDA / "data" / "category_distribution_by_capability.csv"
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["capability", "no_facilities", "real_desert", "data_poor",
