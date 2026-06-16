@@ -9,6 +9,7 @@ from server.warehouse import (
     normalize_district,
     TBL_FACILITIES,
 )
+from server.lib.capability_keywords import build_ilike_conditions
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -26,7 +27,7 @@ def get_district_facilities(
 
     state_canon = normalize_state(state)
     district_canon = normalize_district(district)
-    cap_pattern = f"%{capability.lower()}%"
+    cap_condition = build_ilike_conditions(capability, ["hay"])
 
     sql = f"""
 WITH {alias_ctes()},
@@ -58,7 +59,7 @@ SELECT
   number_doctors, phone_numbers,
   specialties, capability, description,
   source, year_established,
-  CASE WHEN hay LIKE :p1 THEN TRUE ELSE FALSE END AS has_capability,
+  CASE WHEN {cap_condition} THEN TRUE ELSE FALSE END AS has_capability,
   CAST(
     (CASE WHEN latitude IS NOT NULL THEN 1 ELSE 0 END +
      CASE WHEN longitude IS NOT NULL THEN 1 ELSE 0 END +
@@ -69,13 +70,13 @@ SELECT
     ) / 6.0 AS DOUBLE
   ) AS completeness
 FROM fac_district
-WHERE state_canon = :p2
-  AND district_canon = :p3
+WHERE state_canon = :p1
+  AND district_canon = :p2
 ORDER BY has_capability DESC, completeness DESC
 LIMIT 200
 """.strip()
 
-    rows = wh_query(sql, [cap_pattern, state_canon, district_canon])
+    rows = wh_query(sql, [state_canon, district_canon])
     # Frontend expects verification fields too — surface as nulls until /verify is run
     for r in rows:
         r.setdefault("verdict", None)

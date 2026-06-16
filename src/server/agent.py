@@ -16,6 +16,7 @@ from server.warehouse import (
     TBL_PINCODE,
     TBL_NFHS5,
 )
+from server.lib.capability_keywords import build_ilike_conditions
 
 LOGGER = logging.getLogger(__name__)
 
@@ -423,8 +424,8 @@ async def run_assessment(district: str, state: str, capability: str):
     yield sse("tool_call", {"tool": "query_database", "input": f"NFHS-5 data for {district}, {state}"})
 
     state_canon = normalize_state(state)
-    district_canon = normalize_state(district)
-    cap_pattern = f"%{capability.lower()}%"
+    district_canon = normalize_district(district)
+    cap_condition = build_ilike_conditions(capability, ["fac.hay"])
 
     try:
         coverage_rows = wh_query(
@@ -445,9 +446,9 @@ async def run_assessment(district: str, state: str, capability: str):
                 AND f.address_zipOrPostcode NOT IN ('', 'null')
             )
             SELECT
-              :p3 AS district, :p4 AS state,
+              :p1 AS district, :p2 AS state,
               CAST(COUNT(*) AS BIGINT) AS total_facilities,
-              CAST(SUM(CASE WHEN fac.hay LIKE :p1 THEN 1 ELSE 0 END) AS BIGINT) AS matching_facilities,
+              CAST(SUM(CASE WHEN {cap_condition} THEN 1 ELSE 0 END) AS BIGINT) AS matching_facilities,
               CAST(ROUND(AVG(
                 (CASE WHEN fac.latitude IS NOT NULL THEN 1 ELSE 0 END +
                  CASE WHEN fac.longitude IS NOT NULL THEN 1 ELSE 0 END +
@@ -459,10 +460,10 @@ async def run_assessment(district: str, state: str, capability: str):
               ), 2) AS DOUBLE) AS confidence
             FROM fac
             JOIN pin_norm p ON fac.pincode = CAST(p.pincode AS STRING)
-            WHERE p.state_canon = :p2
-              AND p.district_canon = :p5
+            WHERE p.state_canon = :p3
+              AND p.district_canon = :p4
             """,
-            [cap_pattern, state_canon, district, state, district_canon],
+            [district, state, state_canon, district_canon],
         )
         row = coverage_rows[0] if coverage_rows else None
         if row and row.get("total_facilities"):
