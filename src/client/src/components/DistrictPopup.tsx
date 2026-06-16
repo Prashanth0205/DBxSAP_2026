@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, ReactNode } from 'react';
 import { Link } from 'react-router';
 import {
   DistrictCoverage, categorizeDistrict, CATEGORY_META,
+  CapabilityTag, capabilityRelevantStats, statColor, CapabilityStat,
 } from '../lib/types';
 import { useStarred, starKey } from '../lib/starred';
 
@@ -21,7 +22,7 @@ function HoverTooltip({ label, children }: { label: string; children: ReactNode 
 
 interface Props {
   district: DistrictCoverage;
-  capability: string;
+  capability: CapabilityTag;
   onClose: () => void;
   onViewRecommendations: () => void;
 }
@@ -31,6 +32,7 @@ interface Assessment {
   verdict_label: string;
   confidence: string;
   summary: string;
+  inconsistencies?: string[];
   sources: { type: string; ref: string; detail: string; trust?: string }[];
   evidence?: {
     district?: string;
@@ -84,6 +86,7 @@ export function DistrictPopup({ district, capability, onClose, onViewRecommendat
 
   const category = categorizeDistrict(district);
   const categoryMeta = CATEGORY_META[category];
+  const capabilityStats = capabilityRelevantStats(capability, district);
 
   const sk = starKey(district.state, district.district, capability);
   const starred = isStarred(sk);
@@ -261,7 +264,7 @@ export function DistrictPopup({ district, capability, onClose, onViewRecommendat
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-3 gap-3 text-sm">
             <div className="bg-gray-50 p-2 rounded">
               <p className="text-gray-500 text-xs">Total Facilities</p>
               <p className="font-bold text-gray-900">{district.total_facilities}</p>
@@ -274,13 +277,9 @@ export function DistrictPopup({ district, capability, onClose, onViewRecommendat
               <p className="text-gray-500 text-xs">Data Confidence</p>
               <p className="font-bold text-gray-900">{Math.round(district.confidence * 100)}%</p>
             </div>
-            {district.institutional_birth_5y_pct != null && (
-              <div className="bg-gray-50 p-2 rounded">
-                <p className="text-gray-500 text-xs">Inst. Births</p>
-                <p className="font-bold text-gray-900">{district.institutional_birth_5y_pct}%</p>
-              </div>
-            )}
           </div>
+
+          <CapabilityIndicatorsBox capability={capability} stats={capabilityStats} />
         </div>
 
         {loadingAssessment && (
@@ -314,100 +313,23 @@ export function DistrictPopup({ district, capability, onClose, onViewRecommendat
               </div>
             </div>
 
-            {assessment.sources && assessment.sources.length > 0 && (
+            {assessment.inconsistencies && assessment.inconsistencies.length > 0 && (
               <div>
-                <h4 className="text-sm font-bold text-gray-700 mb-2">SOURCES</h4>
-                <div className="space-y-2">
-                  {assessment.sources.map((source, i) => {
-                    const isWebUrl = source.type === 'web' && /^https?:\/\//i.test(source.ref);
-                    const trust = (source.trust || '').toLowerCase();
-                    const isDb = source.type === 'database';
-                    const evidence = assessment.evidence;
-                    return (
-                      <div key={i} className="bg-gray-50 p-2 rounded text-xs">
-                        <div className="flex items-start gap-2">
-                          <HoverTooltip label={TYPE_TOOLTIP[source.type.toLowerCase()] || ''}>
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-help ${
-                                source.type === 'database' ? 'bg-blue-200 text-blue-800' : 'bg-green-200 text-green-800'
-                              }`}
-                            >
-                              {source.type.toUpperCase()}
-                            </span>
-                          </HoverTooltip>
-                          {trust && (
-                            <HoverTooltip label={TRUST_TOOLTIP[trust] || ''}>
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-help ${
-                                  TRUST_STYLE[trust] || TRUST_STYLE.low
-                                }`}
-                              >
-                                {trust.toUpperCase()}
-                              </span>
-                            </HoverTooltip>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            {isWebUrl ? (
-                              <a
-                                href={source.ref}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-medium text-blue-700 hover:underline break-all"
-                              >
-                                {source.ref}
-                              </a>
-                            ) : (
-                              <p className="font-medium text-gray-900 break-all">{source.ref}</p>
-                            )}
-                            <p className="text-gray-600 mt-1">{source.detail}</p>
-                            {isDb && evidence && (
-                              <details className="mt-1.5 group">
-                                <summary className="cursor-pointer text-blue-700 hover:text-blue-900 select-none font-medium">
-                                  View data ▾
-                                </summary>
-                                <div className="mt-1.5 bg-white border border-gray-200 rounded p-2 space-y-1.5">
-                                  <div>
-                                    <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Facility coverage</p>
-                                    <table className="w-full mt-1">
-                                      <tbody>
-                                        <tr><td className="text-gray-600 py-0.5">Total facilities</td><td className="text-right font-mono text-gray-900">{evidence.total_facilities ?? '—'}</td></tr>
-                                        <tr><td className="text-gray-600 py-0.5">Matching capability</td><td className="text-right font-mono text-gray-900">{evidence.matching_facilities ?? '—'}</td></tr>
-                                        <tr><td className="text-gray-600 py-0.5">Gap score (0–10)</td><td className="text-right font-mono text-gray-900">{fmtNum(evidence.gap_score)}</td></tr>
-                                        <tr><td className="text-gray-600 py-0.5">Data confidence</td><td className="text-right font-mono text-gray-900">{fmtNum(evidence.data_confidence)}</td></tr>
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                  {evidence.nfhs5 && Object.values(evidence.nfhs5).some((v) => v !== null && v !== undefined) && (
-                                    <div className="pt-1.5 border-t border-gray-100">
-                                      <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">NFHS-5 indicators</p>
-                                      <table className="w-full mt-1">
-                                        <tbody>
-                                          {Object.entries(NFHS5_LABELS).map(([key, label]) => (
-                                            <tr key={key}>
-                                              <td className="text-gray-600 py-0.5">{label}</td>
-                                              <td className="text-right font-mono text-gray-900">
-                                                {fmtNum(evidence.nfhs5?.[key] as number | null | undefined)}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  )}
-                                  <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-100 break-all">
-                                    Source: <code>virtue_foundation_dataset.facilities</code> + <code>nfhs_5_district_health_indicators</code> via Databricks SQL warehouse.
-                                  </p>
-                                </div>
-                              </details>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <h4 className="text-sm font-bold text-gray-700 mb-2">DATA INCONSISTENCIES</h4>
+                <div className="bg-amber-50 border-l-4 border-amber-500 p-3">
+                  <ul className="space-y-1.5">
+                    {assessment.inconsistencies.map((item, i) => (
+                      <li key={i} className="text-xs text-amber-900 flex items-start gap-2">
+                        <span className="text-amber-600 mt-0.5">⚠</span>
+                        <span className="flex-1 leading-relaxed">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
             )}
+
+            <SourcesSection sources={assessment.sources || []} evidence={assessment.evidence} />
           </div>
         )}
 
@@ -433,6 +355,234 @@ export function DistrictPopup({ district, capability, onClose, onViewRecommendat
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SourcesSection({
+  sources,
+  evidence,
+}: {
+  sources: { type: string; ref: string; detail: string; trust?: string }[];
+  evidence?: Assessment['evidence'];
+}) {
+  const dbSources = sources.filter(s => s.type === 'database');
+  const webSources = sources.filter(s => s.type === 'web');
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h4 className="text-sm font-bold text-gray-700 mb-2">DATABASE SOURCES</h4>
+        {dbSources.length > 0 ? (
+          <div className="space-y-2">
+            {dbSources.map((source, i) => {
+              const trust = (source.trust || '').toLowerCase();
+              return (
+                <div key={i} className="bg-gray-50 p-2 rounded text-xs">
+                  <div className="flex items-start gap-2 flex-wrap">
+                    <HoverTooltip label={TYPE_TOOLTIP['database']}>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-200 text-blue-800 cursor-help">
+                        DATABASE
+                      </span>
+                    </HoverTooltip>
+                    {trust && (
+                      <HoverTooltip label={TRUST_TOOLTIP[trust] || ''}>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-help ${
+                            TRUST_STYLE[trust] || TRUST_STYLE.low
+                          }`}
+                        >
+                          {trust.toUpperCase()}
+                        </span>
+                      </HoverTooltip>
+                    )}
+                    <div className="flex-1 min-w-0 basis-full">
+                      <p className="font-medium text-gray-900">{source.ref}</p>
+                      <p className="text-gray-600 mt-1">{source.detail}</p>
+                      {evidence && (
+                        <details className="mt-1.5 group">
+                          <summary className="cursor-pointer text-blue-700 hover:text-blue-900 select-none font-medium">
+                            View data ▾
+                          </summary>
+                          <div className="mt-1.5 bg-white border border-gray-200 rounded p-2 space-y-1.5">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Facility coverage</p>
+                              <table className="w-full mt-1">
+                                <tbody>
+                                  <tr><td className="text-gray-600 py-0.5">Total facilities</td><td className="text-right font-mono text-gray-900">{evidence.total_facilities ?? '—'}</td></tr>
+                                  <tr><td className="text-gray-600 py-0.5">Matching capability</td><td className="text-right font-mono text-gray-900">{evidence.matching_facilities ?? '—'}</td></tr>
+                                  <tr><td className="text-gray-600 py-0.5">Gap score (0–10)</td><td className="text-right font-mono text-gray-900">{fmtNum(evidence.gap_score)}</td></tr>
+                                  <tr><td className="text-gray-600 py-0.5">Data confidence</td><td className="text-right font-mono text-gray-900">{fmtNum(evidence.data_confidence)}</td></tr>
+                                </tbody>
+                              </table>
+                            </div>
+                            {evidence.nfhs5 && Object.values(evidence.nfhs5).some((v) => v !== null && v !== undefined) && (
+                              <div className="pt-1.5 border-t border-gray-100">
+                                <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">NFHS-5 indicators</p>
+                                <table className="w-full mt-1">
+                                  <tbody>
+                                    {Object.entries(NFHS5_LABELS).map(([key, label]) => (
+                                      <tr key={key}>
+                                        <td className="text-gray-600 py-0.5">{label}</td>
+                                        <td className="text-right font-mono text-gray-900">
+                                          {fmtNum(evidence.nfhs5?.[key] as number | null | undefined)}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                            <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-100 break-all">
+                              Source: <code>virtue_foundation_dataset.facilities</code> + <code>nfhs_5_district_health_indicators</code> via Databricks SQL warehouse.
+                            </p>
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500 italic bg-gray-50 p-2 rounded">
+            No database evidence available for this district.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <h4 className="text-sm font-bold text-gray-700 mb-2">WEB SOURCES</h4>
+        {webSources.length > 0 ? (
+          <div className="space-y-2">
+            {webSources.map((source, i) => {
+              const trust = (source.trust || '').toLowerCase();
+              // Try to find a URL in either ref or detail
+              const urlMatch =
+                source.ref.match(/https?:\/\/\S+/i)?.[0] ||
+                source.detail.match(/https?:\/\/\S+/i)?.[0] ||
+                null;
+              // Use whatever ISN'T the URL as the title
+              const title = urlMatch && source.ref === urlMatch ? source.detail : source.ref;
+              const subtitle = urlMatch && source.detail !== urlMatch ? source.detail : '';
+
+              return (
+                <div key={i} className="bg-gray-50 p-2 rounded text-xs">
+                  <div className="flex items-start gap-2 flex-wrap">
+                    <HoverTooltip label={TYPE_TOOLTIP['web']}>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-200 text-green-800 cursor-help">
+                        WEB
+                      </span>
+                    </HoverTooltip>
+                    {trust && (
+                      <HoverTooltip label={TRUST_TOOLTIP[trust] || ''}>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-help ${
+                            TRUST_STYLE[trust] || TRUST_STYLE.low
+                          }`}
+                        >
+                          {trust.toUpperCase()}
+                        </span>
+                      </HoverTooltip>
+                    )}
+                    <div className="flex-1 min-w-0 basis-full">
+                      <p className="font-medium text-gray-900">{title}</p>
+                      {subtitle && subtitle !== title && (
+                        <p className="text-gray-600 mt-1">{subtitle}</p>
+                      )}
+                      {urlMatch && (
+                        <a
+                          href={urlMatch}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline break-all mt-1 inline-block"
+                        >
+                          {urlMatch}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500 italic bg-gray-50 p-2 rounded">
+            No relevant web articles found for this district.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const CAPABILITY_BOX_LABEL: Record<CapabilityTag, string> = {
+  maternity:  'Maternity Health Indicators',
+  nicu:       'Newborn Care Indicators',
+  icu:        'Critical Care Risk Indicators',
+  emergency:  'Emergency Care Indicators',
+  trauma:     'Trauma Care Indicators',
+  dialysis:   'Renal Care Risk Indicators',
+  oncology:   'Cancer Care Indicators',
+};
+
+function CapabilityIndicatorsBox({
+  capability,
+  stats,
+}: {
+  capability: CapabilityTag;
+  stats: CapabilityStat[];
+}) {
+  const available = stats.filter(s => s.value != null);
+  if (available.length === 0) {
+    return (
+      <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+        <h4 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">
+          {CAPABILITY_BOX_LABEL[capability]}
+        </h4>
+        <p className="text-xs text-gray-500 italic">
+          No NFHS-5 health indicators available for this district.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-blue-200 rounded-lg p-3 bg-blue-50/40">
+      <h4 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">
+        {CAPABILITY_BOX_LABEL[capability]}
+      </h4>
+      <p className="text-[10px] text-gray-500 mb-2.5 italic">
+        Source: NFHS-5 (National Family Health Survey)
+      </p>
+      <ul className="space-y-2">
+        {available.map((stat, i) => {
+          const color = statColor(stat);
+          return (
+            <li key={i} className="flex items-start gap-2 text-xs">
+              <span
+                className="mt-1 w-2 h-2 rounded-full flex-shrink-0"
+                style={{ background: color }}
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium text-gray-800">{stat.label}</span>
+                  <span
+                    className="font-bold tabular-nums"
+                    style={{ color }}
+                  >
+                    {stat.value}{stat.unit}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">
+                  {stat.description}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

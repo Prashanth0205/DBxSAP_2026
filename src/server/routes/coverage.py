@@ -112,7 +112,16 @@ SELECT
   TRY_CAST(n.child_u5_who_are_stunted_height_for_age_18_pct          AS DOUBLE) AS child_stunting_pct,
   TRY_CAST(n.hh_electricity_pct                                      AS DOUBLE) AS hh_electricity_pct,
   TRY_CAST(n.hh_improved_water_pct                                   AS DOUBLE) AS hh_improved_water_pct,
-  TRY_CAST(n.hh_use_improved_sanitation_pct                          AS DOUBLE) AS hh_use_improved_sanitation_pct
+  TRY_CAST(n.hh_use_improved_sanitation_pct                          AS DOUBLE) AS hh_use_improved_sanitation_pct,
+  TRY_CAST(n.births_attended_by_skilled_hp_5y_10_pct                 AS DOUBLE) AS skilled_birth_attendance_pct,
+  TRY_CAST(n.mothers_who_had_at_least_4_anc_visits_lb5y_pct          AS DOUBLE) AS anc_4plus_visits_pct,
+  TRY_CAST(n.child_12_23m_fully_vaccinated_based_on_information_from_eit_pct AS DOUBLE) AS child_vaccinated_pct,
+  TRY_CAST(n.hh_member_covered_health_insurance_pct                  AS DOUBLE) AS health_insurance_pct,
+  TRY_CAST(n.non_pregnant_w15_49_who_are_anaemic_lt_12_0_g_dl_22_pct AS DOUBLE) AS women_anaemic_pct,
+  TRY_CAST(n.w15_plus_with_high_bp_sys_gte_140_mmhg_and_or_dia_gte_90_mm_pct AS DOUBLE) AS hypertension_pct,
+  TRY_CAST(n.w15_plus_with_high_or_very_high_gt_140_mg_dl_blood_sugar_or_pct AS DOUBLE) AS high_blood_sugar_pct,
+  TRY_CAST(n.women_age_30_49_years_ever_undergone_a_cervical_screen_pct AS DOUBLE) AS cervical_screening_pct,
+  TRY_CAST(n.w15_plus_who_use_any_kind_of_tobacco_pct                AS DOUBLE) AS women_tobacco_pct
 FROM agg a
 LEFT JOIN nfhs_canon n
   ON a.state_canon    = n.state_canon
