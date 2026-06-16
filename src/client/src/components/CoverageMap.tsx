@@ -230,12 +230,6 @@ function StateBoundaries() {
 }
 
 export function CoverageMap({ districts, onDistrictClick }: Props) {
-  // India bounding box: roughly SW corner (Kanyakumari) → NE corner (Arunachal)
-  const INDIA_BOUNDS: L.LatLngBoundsLiteral = [
-    [6.5, 68.0],   // southwest
-    [37.5, 97.5],  // northeast
-  ];
-
   return (
     <div className="relative h-full w-full">
       <MapContainer
@@ -243,23 +237,20 @@ export function CoverageMap({ districts, onDistrictClick }: Props) {
         zoom={5}
         minZoom={4}
         maxZoom={10}
-        maxBounds={INDIA_BOUNDS}
-        maxBoundsViscosity={1.0}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom
         zoomControl={false}
+        worldCopyJump={false}
       >
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
-          bounds={INDIA_BOUNDS}
           noWrap
         />
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
           attribution=""
           pane="shadowPane"
-          bounds={INDIA_BOUNDS}
           noWrap
         />
         <StateBoundaries />
